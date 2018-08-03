@@ -77,21 +77,31 @@ def build_database(fn, prefix):
 
 		proteins[pdbid].chains.append(chain)
 		segments = subunit['segment']
-		spans = re.split(r'\),?\s*[0-9][0-9]?\(', segments)
+		spans = re.split(r'\),?\s*[0-9][0-9]?\s*\(?', segments)
 		segstr = ''
+		trouble = '2he6'
 		for i in spans:
 			s = i
+			if pdbid == trouble: print('start:', s)
 			s = re.sub(r'\n[A-Za-z]+', '', s)
+			if pdbid == trouble: print(s)
 			s = re.sub(r'\r?\n', '', s)
+			if pdbid == trouble: print(s)
 			s = re.sub(r'^\s*[0-9]+\(\s*', '', s)
+			if pdbid == trouble: print(s)
 			s = re.sub(r'\s+', '', s)
+			if pdbid == trouble: print(s)
 			s = re.sub(r'[0-9]+\(', '', s)
+			if pdbid == trouble: print(s)
 			s = re.sub(r'\)[^\-]*', '', s)
-			segstr += s + ','
+			if pdbid == trouble: print(s)
+			if s.strip(): segstr += s + ','
+			if pdbid == trouble: print('final:', s)
 		#print(segments)
 		#print(segstr[:-1])
 		#print(sorted(db))
 		writeme.append('{}_{}\t{}\n'.format(pdbid, letter, segstr[:-1]))
+		if pdbid == trouble: print(writeme[-1])
 		if pdbid in related_proteins:
 			for relpdbid in related_proteins[pdbid]:
 				writeme.append('{}_{}\t{}\n'.format(relpdbid, letter, segstr[:-1]))
