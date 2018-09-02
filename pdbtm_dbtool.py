@@ -94,6 +94,13 @@ class PDB(object):
 			if section.tag.endswith('CHAIN'): 
 				self.chains.append(Chain(parent=self))
 				self.chains[-1].load_xml(section)
+
+	@staticmethod
+	def parse_xml(f):
+		obj = PDB()
+		obj.load_xml(f)
+		return obj
+
 	def get_fasta(self):
 		s = ''
 		hdone = []
@@ -143,6 +150,9 @@ class Chain(object):
 
 	def __iter__(self): return iter(self.regions)
 
+	#not sure if this should return the number of regions instead
+	def __len__(self): return len(self.seq)
+
 	def count(self, topotypes='BCH'):
 		s = 0
 		for r in self.regions:
@@ -178,8 +188,23 @@ class Region(object):
 		self.pdb_beg = int(element.attrib['pdb_beg'])
 		self.pdb_end = int(element.attrib['pdb_end'])
 		self.topo = element.attrib['type']
-		if self.parent is not None:
-			self.seq = self.parent.seq[self.seq_beg-1:self.seq_end]
+		if self.parent is not None: self.seq = self.parent.seq[self.seq_beg-1:self.seq_end]
+
+	def update_seq(self):
+		if self.parent is not None: self.seq = self.parent.seq[self.seq_beg-1:self.seq_end]
+
+	def set_seq_beg(self, seq_beg): 
+		self.seq_beg = seq_beg
+		self.update_seq()
+	def set_seq_end(self, seq_end): 
+		self.seq_end = seq_end
+		self.update_seq()
+	def set_pdb_beg(self, pdb_beg): 
+		self.pdb_beg = pdb_beg
+		self.update_seq()
+	def set_pdb_end(self, pdb_end): 
+		self.pdb_end = pdb_end
+		self.update_seq()
 
 	def __contains__(self, i):
 		#not sure if this should be seq_beg or pdb_beg
@@ -187,6 +212,14 @@ class Region(object):
 		else: return True
 
 	def __iter__(self): return iter(self.seq)
+
+	def __str__(self): 
+		s = '<Region '
+		s += 'topo={} '.format(self.topo)
+		s += 'seq={}-{} '.format(self.seq_beg, self.seq_end)
+		s += 'pdb={}-{} '.format(self.pdb_beg, self.pdb_end)
+		s = s.strip() + '>'
+		return s
 
 def extract_sequences(pdbtmdir):
 	pdbs = []

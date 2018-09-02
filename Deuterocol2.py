@@ -27,6 +27,7 @@ class Deuterocol2(object):
 							try: pdblist[-1][fam] += sl[1].strip().split(',')
 							except KeyError: pdblist[-1][fam] = sl[1].strip().split(',')
 
+		
 		print(pdblist)
 
 		if not os.path.isdir(args.outdir): os.mkdir(args.outdir)
