@@ -2,7 +2,7 @@
 
 from __future__ import print_function
 
-import argparse, os, re, tempfile, subprocess
+import argparse, os, re, tempfile, subprocess, json
 import urllib
 import sys
 
@@ -14,6 +14,7 @@ CORES = 8
 VERBOSITY = 1
 
 def info(*things): print('[INFO]:', *things, file=sys.stderr)
+def warn(*things): print('[WARNING]:', *things, file=sys.stderr)
 
 def probably_nucleic(s):
 	if s.count('T') + s.count('C') + s.count('U') + s.count('A') + s.count('G') >= (0.9 * len(s)): return True
@@ -39,6 +40,104 @@ def pdb_fetch_seq(pdblist):
 	return fastas
 
 #TODO: offload to common stuff
+class Interval(object):
+	def __init__(self, a, b):
+		self.start = a
+		self.end = b
+	def __contains__(self, something):
+		return True if self.start <= something <= self.end else False
+
+	def __iter__(self): return self.start, self.end
+	def __repr__(self): return 'Interval({}, {})'.format(self.start, self.end)
+	def intersects(self, other):
+		if self.start <= other.start <= self.end: return True
+		elif self.start <= other.end <= self.end: return True
+		elif other.start <= self.start <= other.end: return True
+		elif other.start <= self.end <= other.end: return True
+		else: return False
+	def union(self, other):
+		return Interval(min(self.start, other.start), max(self.end, other.end))
+	def __lt__(self, other):
+		if self.start < other.start: return True
+		elif self.start == other.start:
+			if self.end < other.end: return True
+			else: return False
+		else: return False
+
+class Spans(object):
+	def __init__(self, spans=None):
+		self.spans = [] if spans is None else spans
+
+	@staticmethod
+	def parse_str(s):
+		spansobj = Spans()
+		for ss in re.split('\s*,\s*', s.strip()):
+			spansobj.add([int(i) for i in ss.split('-')])
+		return spansobj
+
+	@staticmethod
+	def parse_json(s):
+		obj = json.loads(s)
+		intervals = []
+		for x in obj: intervals.append(Interval(x[0], x[1]))
+		return Spans(intervals)
+
+	def dump_json(self):
+		obj = [[s.start, s.end] for s in self]
+		return json.dumps(obj)
+
+	def add(self, span): self.spans.append(Interval(*span))
+
+	def __len__(self): return len(self.spans)
+	def __repr__(self): 
+		s = 'Span(Interval[{}])'.format(len(self))
+		return s
+	def __iter__(self): return iter(self.spans)
+	def __str__(self):
+		s = 'Span(['
+		#for i in self: s += str(i) + ', '
+		for i in self: s += '{}-{}, '.format(i.start, i.end)
+		s = s[:-2] + '])'
+		return s
+	def __getitem__(self, i): return self.spans[i]
+	def __setitem__(self, i, x): self.spans[i] = x
+
+	def extend(self, other, selfish=False):
+		mergeme = []
+		exc1 = set()
+		exc2 = set()
+		for i, s1 in enumerate(self):
+			for j, s2 in enumerate(other):
+				if s1.intersects(s2): 
+					mergeme.append((i,j))
+					exc1.add(i)
+					exc2.add(j)
+				if selfish: exc2.add(j)
+		spansobj = Spans()
+		for s in mergeme: 
+			newinterval = self[s[0]].union(other[s[1]])
+			spansobj.add([newinterval.start, newinterval.end])
+		for i, s in enumerate(self):
+			if i in exc1: continue
+			spansobj.add([self[i].start, self[i].end])
+		for j, s in enumerate(other):
+			if j in exc2: continue
+			spansobj.add([other[j].start, other[j].end])
+		spansobj.spans.sort()
+		return spansobj
+
+	def merge(self):
+		unmerged = True
+		while unmerged:
+			unmerged = False
+			for i in range(len(self)-1):
+				if self[i].intersects(self[i+1]):
+					unmerged = True
+					self[i] = self[i].union(self[i+1])
+					self.spans.pop(i+1)
+					break
+		
+
 class TCID(object):
 	def __init__(self):
 		self.tcid = ['', '', '', '', '', '']
@@ -302,6 +401,8 @@ class Deuterocol1(object):
 		qtclist = [TCID.parse_str(tcstr2) for tcstr2 in tclist]
 		pdbclist = set()
 		pdbcdict = {}
+
+		pdb2tcdb = {}
 		with open('{}/tcmap.tsv'.format(self.tmdatadir)) as f:
 			for l in f:
 				if not l.strip(): continue
@@ -318,37 +419,136 @@ class Deuterocol1(object):
 							pdbclist.add(pdbc)
 							try: pdbcdict[str(qtcid)].append(pdbc)
 							except KeyError: pdbcdict[str(qtcid)] = [pdbc]
+							pdb2tcdb[pdbc] = str(ttcid)
+		with open('{}/tcmap.json'.format(self.outdir), 'w') as g: g.write(json.dumps(pdb2tcdb))
 
-		with open('{}/pdblist'.format(self.outdir), 'w') as f:
-			for qtc in sorted(pdbcdict): 
-				s = '{}\t'.format(qtc)
-				for pdbid in pdbcdict[qtc]: s += '{},'.format(pdbid)
-				f.write('{}\n'.format(s[:-1]))
-		exit(1)
+		with open('{}/pdblist.json'.format(self.outdir), 'w') as f: f.write(json.dumps(pdbcdict))
 
 	def fetch_pdbs(self, force=False):
 		pdbidlist = set()
-		with open('{}/pdblist'.format(self.outdir)) as f:
-			for l in f: pdbidlist.add(l[:4])
+		with open('{}/pdblist.json'.format(self.outdir)) as f:
+			pdbcdict = json.loads(f.read())
+			for fam in pdbcdict: 
+				[pdbidlist.add(pdbid[:4]) for pdbid in pdbcdict[fam]]
 
 		tf = tempfile.NamedTemporaryFile()
+		dl = False
 		for pdbid in sorted(pdbidlist):
 			if not force:
-				if os.path.isfile('{}/{}.pdb.gz'): continue
-				if os.path.isfile('{}/{}.pdb'): continue
+				if os.path.isfile('{}/pdbs/{}.pdb.gz'.format(self.outdir, pdbid)): continue
+				elif os.path.isfile('{}/pdbs/{}.pdb'.format(self.outdir, pdbid)): continue
 			tf.write('https://files.rcsb.org/download/{}.pdb.gz\n'.format(pdbid))
+			dl = True
 		tf.flush()
 
 		if not os.path.isdir('{}/pdbs'.format(self.outdir)): os.mkdir('{}/pdbs'.format(self.outdir))
 
-		if VERBOSITY: info('Downloading PDBs...')
-		cmd = ['wget', '-P', '{}/pdbs'.format(self.outdir), '-i', tf.name, '--no-check-certificate']
-		if not force: cmd.append('-nc')
-		subprocess.call(cmd)
+		if dl:
+			if VERBOSITY: info('Downloading PDBs...')
+			cmd = ['wget', '-P', '{}/pdbs'.format(self.outdir), '-i', tf.name, '--no-check-certificate']
+			if not force: cmd.append('-nc')
+			else:
+				for fn in os.listdir('{}/pdbs'.format(self.outdir)):
+					if fn.startswith('.'): continue
+					elif fn.endswith('.pdb'): os.remove('{}/pdbs/{}'.format(self.outdir, fn))
+					elif fn.endswith('.pdb.gz'): os.remove('{}/pdbs/{}'.format(self.outdir, fn))
+			if dl: subprocess.call(cmd)
+		elif VERBOSITY: info('Skipped downloading PDBs')
 
 		for pdbid in sorted(pdbidlist):
 			if os.path.isfile('{}/pdbs/{}.pdb.gz'.format(self.outdir, pdbid)):
-				subprocess.call(['gunzip', '{}/pdbs/{}.pdb.gz'.format(self.outdir, pdbid)])
+				cmd = ['gunzip']
+				if force: cmd.append('-f')
+				cmd.append('{}/pdbs/{}.pdb.gz'.format(self.outdir, pdbid))
+				subprocess.call(cmd)
+
+	def fetch_indices_method1(self):
+		''' Method 1: OPM, PDBTM, and STRIDE
+
+		$OPM $PDBTM union $STRIDE intersection
+		'''
+		pdbidlist = set()
+		with open('{}/pdblist.json'.format(self.outdir)) as f:
+			pdbcdict = json.loads(f.read())
+			for fam in pdbcdict: 
+				[pdbidlist.add(pdbid) for pdbid in pdbcdict[fam]]
+
+		opmspans = self.fetch_spans(pdbidlist, 'opm')
+		pdbtmspans = self.fetch_spans(pdbidlist, 'pdbtm')
+		stridespans = self.gen_stride_spans(pdbidlist, 'stride')
+
+		unionspans = {}
+		tmspans = {}
+
+		indextable = {}
+		for pdbid in sorted(pdbidlist):
+			unionspans[pdbid] = opmspans[pdbid].extend(pdbtmspans[pdbid])
+			tmspans[pdbid] = unionspans[pdbid].extend(stridespans[pdbid], selfish=True)
+			tmspans[pdbid].merge()
+
+			indextable[pdbid] = [[s.start, s.end] for s in tmspans[pdbid]]
+		with open('{}/indices.json'.format(self.outdir), 'w') as f:
+			f.write(json.dumps(indextable))
+
+			#print(pdbid)
+			#print('\t', opmspans[pdbid])
+			#print('\t', pdbtmspans[pdbid])
+			#print('\t', unionspans[pdbid])
+			#print('\t', stridespans[pdbid])
+			#print('\t', tmspans[pdbid])
+			#print('#'*80)
+
+	def gen_stride_spans(self, pdbidlist, db='stride'):
+		#TODO: a practical way to fold this back into a dbtool
+		spans = {}
+		altspans = {}
+		for pdbid in sorted(pdbidlist): spans[pdbid] = Spans()
+		pdbs = set([pdbid[:4] for pdbid in pdbidlist])
+		for pdb in pdbs: altspans[pdb] = Spans()
+
+		for pdb in pdbs:
+			cmd = ['stride', '{}/pdbs/{}.pdb'.format(self.outdir, pdb)]
+			out = subprocess.check_output(cmd)
+			for l in out.split('\n'):
+				if not l.strip(): continue
+				#TODO: generalize to allow beta barrels too
+				elif l.startswith('LOC  AlphaHelix'): 
+					#print(l)
+					start = int(l[21:27].strip())
+					chain = l[28]
+					end = int(l[39:45].strip())
+					try: spans[pdb + '_' + chain].add([start, end])
+					except KeyError: altspans[pdb].add([start, end])
+		#this could probably be reworked
+		for pdbid in spans:
+			if len(spans[pdbid]) == 0:
+				spans[pdbid] = altspans[pdbid[:4]]
+		return spans
+						
+
+	def fetch_spans(self, pdbidlist, db='opm'):
+		spans = {}
+		altspans = {}
+		for pdbid in sorted(pdbidlist): spans[pdbid] = None
+		for pdbid in sorted(pdbidlist): altspans[pdbid[:4]] = None
+
+		with open('{}/{}/ASSIGNMENTS.TSV'.format(self.tmdatadir, db)) as f:
+			for l in f:
+				if not l.strip(): continue
+				elif l.startswith('#'): continue
+				sl = l.split()
+				dbid = sl[0][:4].upper() + sl[0][4:]
+				if dbid in spans:
+					spans[dbid] = Spans.parse_str(sl[1])
+				elif dbid[:4] in altspans:
+					altspans[dbid[:4]] = Spans.parse_str(sl[1])
+		for pdbid in spans:
+			if spans[pdbid] is None:
+				if VERBOSITY: warn('PDB {} not listed on {}, falling back on {}'.format(pdbid, db, pdbid[:4]))
+				spans[pdbid] = altspans[pdbid[:4]]
+		return spans
+
+
 
 
 	def run(self, *tclist, **kwargs):
@@ -364,6 +564,8 @@ class Deuterocol1(object):
 		#if force or not (os.path.isfile('{}/pdblist'.format(self.outdir))): self.get_pdbs(*tclist)
 		self.get_pdbs(*tclist)
 		self.fetch_pdbs(force=force)
+
+		self.fetch_indices_method1()
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Cross-checks OPM and PDBTM against TCDB')
