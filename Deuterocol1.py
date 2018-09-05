@@ -108,7 +108,9 @@ class Spans(object):
 		exc2 = set()
 		for i, s1 in enumerate(self):
 			for j, s2 in enumerate(other):
-				if s1.intersects(s2): 
+				#if s1.intersects(s2): 
+				#this is a quick, dirty workaround that will surely be replaced by geometric constraints
+				if s1.intersects(s2) and max(s2.end - s1.start, s1.end - s2.start) <= 40:  
 					mergeme.append((i,j))
 					exc1.add(i)
 					exc2.add(j)
@@ -131,7 +133,9 @@ class Spans(object):
 		while unmerged:
 			unmerged = False
 			for i in range(len(self)-1):
-				if self[i].intersects(self[i+1]):
+				#if self[i].intersects(self[i+1]):
+				#this is a quick, dirty workaround that will surely be replaced by geometric constraints
+				if self[i].intersects(self[i+1]) and max(self[i+1].end - self[i].start, self[i].end - self[i].start) <= 40:
 					unmerged = True
 					self[i] = self[i].union(self[i+1])
 					self.spans.pop(i+1)
@@ -529,8 +533,8 @@ class Deuterocol1(object):
 	def fetch_spans(self, pdbidlist, db='opm'):
 		spans = {}
 		altspans = {}
-		for pdbid in sorted(pdbidlist): spans[pdbid] = None
-		for pdbid in sorted(pdbidlist): altspans[pdbid[:4]] = None
+		for pdbid in sorted(pdbidlist): spans[pdbid] = Spans()
+		for pdbid in sorted(pdbidlist): altspans[pdbid[:4]] = Spans()
 
 		with open('{}/{}/ASSIGNMENTS.TSV'.format(self.tmdatadir, db)) as f:
 			for l in f:
@@ -543,13 +547,11 @@ class Deuterocol1(object):
 				elif dbid[:4] in altspans:
 					altspans[dbid[:4]] = Spans.parse_str(sl[1])
 		for pdbid in spans:
-			if spans[pdbid] is None:
+			#if spans[pdbid] is None:
+			if len(spans[pdbid]) == 0:
 				if VERBOSITY: warn('PDB {} not listed on {}, falling back on {}'.format(pdbid, db, pdbid[:4]))
 				spans[pdbid] = altspans[pdbid[:4]]
 		return spans
-
-
-
 
 	def run(self, *tclist, **kwargs):
 		force = kwargs['force'] if 'force' in kwargs else False
