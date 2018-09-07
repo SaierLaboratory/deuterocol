@@ -4,6 +4,8 @@ from __future__ import print_function, division, generators
 
 import argparse, json, os, subprocess, re, sys, time
 
+
+VERBOSITY = 1
 def info(*things):
 	print('[INFO]:', *things, file=sys.stderr)
 
@@ -137,56 +139,64 @@ class Superpose(object):
 			self.famdirs = [self.d2dir]
 		else:
 			for fn in os.listdir(self.d2dir):
-				if os.path.isdir('{}/{}'.format(self.d2dir, fn)) and '_vs_' in fn:
+				if fn.startswith('.'): continue
+				elif os.path.isdir('{}/{}'.format(self.d2dir, fn)) and '_vs_' in fn:
 					self.famdirs.append('{}/{}'.format(self.d2dir, fn))
 
 	def run(self):
+		if VERBOSITY: info('Checking for expected directory contents...')
 		for famdir in self.famdirs:
 			if not os.path.isfile('{}/config/agenda.json'.format(famdir)): raise IOError('Deuterocol2 directory structure not complete for {}'.format(famdir))
 
-		done = []
-		if not self.force and os.path.isfile('{}/superpositions/sp_all.tsv'.format(famdir)):
-			with open('{}/superpositions/sp_all.tsv'.format(famdir)) as f:
-				for l in f: 
-					if not l.strip(): continue
-					elif l.startswith('#'): continue
-					else: done.append(l.split('\t')[0])
-		if done: info('Skipping {} alignments (already done)'.format(len(done)))
+		for famdir in self.famdirs:
+			done = []
+			if VERBOSITY: info('Checking for existing alignments in {}...'.format(famdir))
+			if not self.force and os.path.isfile('{}/superpositions/sp_all.tsv'.format(famdir)):
+				with open('{}/superpositions/sp_all.tsv'.format(famdir)) as f:
+					for l in f: 
+						if not l.strip(): continue
+						elif l.startswith('#'): continue
+						else: done.append(l.split('\t')[0])
+			if done: info('Skipping {} alignments (already done)'.format(len(done)))
 
-		todo = -len(done)
-		with open('{}/config/agenda.json'.format(famdir)) as g:
-			for l in g: todo += 1
-
-		n = 0
-		t = time.time()
-		with open('{}/superpositions/sp_all.tsv'.format(famdir), 'a') as f:
+			todo = -len(done)
 			with open('{}/config/agenda.json'.format(famdir)) as g:
-				for l in g:
-					obj = json.loads(l)
-					if not self.force and obj['name'] in done: continue
-					if not n % 100: 
-						info('Finished {}/{} alignments ({:0.2f}s since last message)'.format(n, todo, time.time() - t))
-						t = time.time()
-					cmd = ['superpose', \
-						'{}/pdbs/{}.pdb'.format(famdir, obj['query']), \
-						'-s', '{}/{}-{}'.format(obj['qchain'], *obj['qspan']), \
-						'{}/pdbs/{}.pdb'.format(famdir, obj['subject']), \
-						'-s', '{}/{}-{}'.format(obj['schain'], *obj['sspan']), \
-					]
-					out = subprocess.check_output(cmd)
-					sp = Alignment.parse_spout(out)
-					sp.query = obj['query']
-					sp.queryfn = cmd[1]
-					sp.qchain = obj['qchain']
-					sp.qpresent = [obj['qspan']]
-					sp.qhel = obj['qhelices']
-					sp.subject = obj['subject']
-					sp.subjectfn = cmd[4]
-					sp.schain = obj['schain']
-					sp.spresent = [obj['sspan']]
-					sp.shel = obj['shelices']
-					f.write('{}\t{}\n'.format(obj['name'], sp.dump_json()))
-					n += 1
+				for l in g: todo += 1
+
+			n = 0
+			t = time.time()
+			if VERBOSITY: info('Performing {} alignments...'.format(todo))
+			if todo:
+				with open('{}/superpositions/sp_all.tsv'.format(famdir), 'a') as f:
+					with open('{}/config/agenda.json'.format(famdir)) as g:
+						for l in g:
+							obj = json.loads(l)
+							if not self.force and obj['name'] in done: continue
+							if not n % 100: 
+								info('Finished {}/{} alignments ({:0.2f}s since last message)'.format(n, todo, time.time() - t))
+								t = time.time()
+							cmd = ['superpose', \
+								'{}/pdbs/{}.pdb'.format(famdir, obj['query']), \
+								'-s', '{}/{}-{}'.format(obj['qchain'], *obj['qspan']), \
+								'{}/pdbs/{}.pdb'.format(famdir, obj['subject']), \
+								'-s', '{}/{}-{}'.format(obj['schain'], *obj['sspan']), \
+							]
+							out = subprocess.check_output(cmd)
+							sp = Alignment.parse_spout(out)
+							sp.query = obj['query']
+							sp.queryfn = cmd[1]
+							sp.qchain = obj['qchain']
+							sp.qpresent = [obj['qspan']]
+							sp.qhel = obj['qhelices']
+							sp.subject = obj['subject']
+							sp.subjectfn = cmd[4]
+							sp.schain = obj['schain']
+							sp.spresent = [obj['sspan']]
+							sp.shel = obj['shelices']
+							f.write('{}\t{}\n'.format(obj['name'], sp.dump_json()))
+							n += 1
+			info('Finished alignments for {}'.format(famdir))
+		info('Finished all assigned alignments')
 
 
 if __name__ == '__main__':

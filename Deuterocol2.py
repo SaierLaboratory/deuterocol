@@ -140,11 +140,12 @@ class Paragraph(object):
 		return tcmap
 
 class Deuterocol2(object):
-	def __init__(self, tmdatadir, d1dir, outdir, force=False, bundle=4, loopless=False):
+	def __init__(self, tmdatadir, d1dir, outdir, force=False, bundle=4, loopless=False, allow_internal=False):
 		self.tmdatadir = tmdatadir
 		self.d1dir = d1dir
 		self.outdir = outdir
 		self.loopless = loopless
+		self.allow_internal = allow_internal
 
 		self.force = force
 
@@ -176,6 +177,7 @@ class Deuterocol2(object):
 
 		for fam1 in sorted(pdblist[0]):
 			for fam2 in sorted(pdblist[1]):
+				if not self.allow_internal and fam1 == fam2: continue
 				fam2pdb = [{fam1:pdblist[0][fam1]}, {fam2:pdblist[1][fam2]}]
 				x = Paragraph.load_d2(d2obj=self, pdblist=fam2pdb)
 				x.initialize_dir()
@@ -195,6 +197,7 @@ if __name__ == '__main__':
 
 	parser.add_argument('--tmdatadir', default='tmdata', help='Directory containing TM-prediction data and PDBs')
 	parser.add_argument('--outdir', default='deuterocol2', help='Directory intended to contain Deuterocol2 output')
+	parser.add_argument('--allow-internal', action='store_true', help='Allow self-vs-self comparisons')
 
 	args = parser.parse_args()
 
@@ -202,5 +205,5 @@ if __name__ == '__main__':
 		parser.print_usage()
 		exit(1)
 
-	deut = Deuterocol2(tmdatadir=args.tmdatadir, d1dir=args.d1dir, outdir=args.outdir, bundle=args.l, loopless=args.loopless)
+	deut = Deuterocol2(tmdatadir=args.tmdatadir, d1dir=args.d1dir, outdir=args.outdir, bundle=args.l, loopless=args.loopless, allow_internal=args.allow_internal)
 	deut.run(args.fams1, args.fams2)
