@@ -512,7 +512,8 @@ class Deuterocol1(object):
 
 		for pdb in pdbs:
 			cmd = ['stride', '{}/pdbs/{}.pdb'.format(self.outdir, pdb)]
-			out = subprocess.check_output(cmd)
+			try: out = subprocess.check_output(cmd)
+			except subprocess.CalledProcessError: continue
 			for l in out.split('\n'):
 				if not l.strip(): continue
 				#TODO: generalize to allow beta barrels too
