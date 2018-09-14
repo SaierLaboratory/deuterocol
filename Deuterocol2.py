@@ -159,7 +159,7 @@ class Deuterocol2(object):
 				for tcid in obj:
 					found = True
 					for fam in famlist1:
-						if Deuterocol1.parse_str(tcid) in Deuterocol1.parse_str(fam): 
+						if Deuterocol1.TCID.parse_str(tcid) in Deuterocol1.TCID.parse_str(fam): 
 							found = False
 							break
 						if not found: break
