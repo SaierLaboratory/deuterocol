@@ -252,12 +252,12 @@ def plot_kde(kde, fig, ax, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100)
 
 	fig.colorbar(im, ax=ax)
 
-def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100, density_outfile='kde_plot.png', scatter_outfile='kde_scatter.png'):
+def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100, density_outfile='kde_plot.png', scatter_outfile='kde_scatter.png', text=''):
 	figure = Figure()
 	canvas = FigureCanvas(figure)
 	ax = []
 	plots = []
-	for i in range(3): 
+	for i in range(4): 
 		ax.append(figure.add_subplot(2, 2, len(ax)+1))
 		plots.append(Plot(fig=figure, canvas=canvas, ax=ax[-1]))
 		#print(dir(ax[-1]))
@@ -268,6 +268,9 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 	ax[1].set_title('Negative (n={})'.format(len(negative.mincovs)))
 	plot_kde(unknown, fig=figure, ax=ax[2], rmsdlim=rmsdlim, mincovlim=mincovlim, resolution=resolution)
 	ax[2].set_title('Unknown (n={})'.format(len(unknown.mincovs)))
+
+	ax[3].axis([0, 1, 0, 1])
+	ax[3].text(0.0, 0.0, text, fontsize=6., fontname='monospace')
 
 	figure.savefig(density_outfile, dpi=600)
 	plot_rmsd_cov(positive, fig=figure, ax=ax[0])
@@ -286,17 +289,26 @@ def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density
 	with open(unknownfn) as f: unknown = Dataset(f, count=count, mode='stretchone', marg=stretch)
 	unknown.gen_rmsd_mincov_kde()
 
-	print('#{}, {}, {}. stretch={}, n={}'.format(positivefn, negativefn, unknownfn, stretch, count))
+	text = '#{}, {}, {}. stretch={}, n={}\n'.format(positivefn, negativefn, unknownfn, stretch, count)
 
 	min_rmsd, max_rmsd = 0.0, 6.0
 	min_mincov, max_mincov = 0.4, 1.0
 
 	unkpoints = np.vstack([unknown.rmsds, unknown.mincovs])
 	unkposteriors = positive.evaluate(unkpoints) * len(positive.rmsds) / (positive.evaluate(unkpoints) * len(positive.rmsds) + negative.evaluate(unkpoints) * len(negative.rmsds))
-	print('#Alignment\tPosterior\tRMSD\tCoverage')
+	#text += '#Alignment\tPosterior\tRMSD\tCoverage\n'
+	text += '#Alignment'.ljust(32)
+	text += 'Posterior'.ljust(12)
+	text += 'RMSD'.ljust(6)
+	text += 'Coverage\n'
 	for post, name, rmsd, mincov in sorted(zip(unkposteriors, unknown.names, unknown.rmsds, unknown.mincovs))[::-1][:10]:
-		print('{}\t{:0.02e}\t{:0.1f}\t{:0.0%}'.format(name, post, rmsd, mincov))
-	plot_densities(positive, negative, unknown, rmsdlim=(min_rmsd, max_rmsd), mincovlim=(0.0, max_mincov), resolution=100, density_outfile=density_outfile, scatter_outfile=scatter_outfile)
+		#text += '{}\t{:0.02e}\t{:0.1f}\t{:0.0%}\n'.format(name, post, rmsd, mincov)
+		text += '{}'.format(name).ljust(32)
+		text += '{:0.02e}'.format(post).ljust(12)
+		text += '{:0.1f}'.format(rmsd).ljust(6)
+		text += '{:0.0%}\n'.format(mincov)
+	print(text)
+	plot_densities(positive, negative, unknown, rmsdlim=(min_rmsd, max_rmsd), mincovlim=(0.0, max_mincov), resolution=100, density_outfile=density_outfile, scatter_outfile=scatter_outfile, text=text.replace('\t', '        '))
 
 	#print('stats: ({} <= RMSD <= {}, {} <= minCov <= {}, n={})'.format(min_rmsd, max_rmsd, min_mincov, max_mincov, count*3))
 	#print('positive:', positive.kernel.integrate_box([min_rmsd, min_mincov], [max_rmsd, max_mincov]))
