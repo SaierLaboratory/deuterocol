@@ -5,6 +5,8 @@ from __future__ import print_function
 import argparse, os, re, tempfile, subprocess, json
 import urllib
 import sys
+import random
+random.seed(0)
 
 import Bio.Blast.NCBIXML
 
@@ -147,6 +149,13 @@ class TCID(object):
 		self.tcid = ['', '', '', '', '', '']
 		self.tc_class, self.tc_subclass, self.tc_family, self.tc_subfamily, self.tc_transporter, self.tc_id = self.tcid
 
+	def __getitem__(self, i): return self.tcid[i]
+
+	def __getslice__(self, start, end, step=1):
+		x = TCID()
+		x.tcid = self.tcid[start:end:step]
+		return x
+
 	@staticmethod
 	def parse_str(s):
 		ss = re.split('\.|-', s)
@@ -265,10 +274,12 @@ class TMData(object):
 
 #TODO: let's try using sqlite instead of scattered TSVs
 class Deuterocol1(object):
-	def __init__(self, tmdatadir, outdir):
+	def __init__(self, tmdatadir, outdir, inclusive=True, invert=False):
 		self.tmdatadir = tmdatadir
 		self.outdir = outdir
 		self.tmdata = TMData()
+		self.inclusive = inclusive
+		self.invert = invert
 
 	def get_pdb_sequences(self):
 		subunitlist = self.tmdata.get_distinct_subunits()
@@ -424,9 +435,9 @@ class Deuterocol1(object):
 							try: pdbcdict[str(qtcid)].append(pdbc)
 							except KeyError: pdbcdict[str(qtcid)] = [pdbc]
 							pdb2tcdb[pdbc] = str(ttcid)
-		with open('{}/tcmap.json'.format(self.outdir), 'w') as g: g.write(json.dumps(pdb2tcdb))
+		with open('{}/tcmap.json'.format(self.outdir), 'w') as g: g.write(json.dumps(pdb2tcdb, indent=4))
 
-		with open('{}/pdblist.json'.format(self.outdir), 'w') as f: f.write(json.dumps(pdbcdict))
+		with open('{}/pdblist.json'.format(self.outdir), 'w') as f: f.write(json.dumps(pdbcdict, indent=4))
 
 	def fetch_pdbs(self, force=False):
 		pdbidlist = set()
@@ -492,7 +503,7 @@ class Deuterocol1(object):
 
 			indextable[pdbid] = [[s.start, s.end] for s in tmspans[pdbid]]
 		with open('{}/indices.json'.format(self.outdir), 'w') as f:
-			f.write(json.dumps(indextable))
+			f.write(json.dumps(indextable, indent=4))
 
 			#print(pdbid)
 			#print('\t', opmspans[pdbid])
@@ -554,7 +565,7 @@ class Deuterocol1(object):
 				spans[pdbid] = altspans[pdbid[:4]]
 		return spans
 
-	def run(self, *tclist, **kwargs):
+	def run(self, *rawtclist, **kwargs):
 		force = kwargs['force'] if 'force' in kwargs else False
 
 		if not os.path.isdir(self.tmdatadir): os.mkdir(self.tmdatadir)
@@ -565,6 +576,95 @@ class Deuterocol1(object):
 
 		if not os.path.isdir(self.outdir): os.mkdir(self.outdir)
 		#if force or not (os.path.isfile('{}/pdblist'.format(self.outdir))): self.get_pdbs(*tclist)
+
+		if self.invert: 
+			if os.path.isfile('{}/tcdb/superfamily.json'.format(self.tmdatadir)):
+				with open('{}/tcdb/superfamily.json'.format(self.tmdatadir)) as f:
+					obj = json.loads(f.read())
+
+				potential_families = []
+				for superfam in obj: 
+					match = False
+					for tfam in obj[superfam]:
+						for qfam in rawtclist:
+							if TCID.parse_str(tfam) in TCID.parse_str(qfam):
+								match = True
+								break
+							elif TCID.parse_str(qfam) in TCID.parse_str(tfam):
+								match = True
+								break
+						if match: break
+					if not match: 
+						potential_families += obj[superfam]
+
+				#the set of families not matching anything in the query
+				potential_families = set(potential_families)
+
+				#the set of families with structures
+				solved_families = set()
+				fam2pdb = {}
+
+				#the set of subfamilies with structures
+				solved_subfamilies = set()
+				subfam2pdb = {}
+				target_chains = 0
+				with open('{}/tcmap.tsv'.format(self.tmdatadir)) as f:
+					for l in f:
+						if not l.strip(): continue
+						elif l.startswith('#'): continue
+						sl = l.split('\t')
+						tcid = TCID.parse_str(sl[0])
+						fam = tcid[:3]
+						solved_families.add(str(fam))
+						subfam = tcid[:4]
+						solved_subfamilies.add(str(subfam))
+
+						try: fam2pdb[fam] += sl[1].split(',')
+						except KeyError: fam2pdb[fam] = sl[1].split(',')
+
+						try: subfam2pdb[str(subfam)] += sl[1].split(',')
+						except KeyError: subfam2pdb[str(subfam)] = sl[1].split(',')
+
+						for qfam in rawtclist:
+							if tcid in TCID.parse_str(qfam):
+								target_chains += len(sl[1].split(','))
+
+				#the pool of subfamilies to draw from
+				final_subfamilies = set()
+				for pfam in potential_families:
+					for ssubfam in solved_subfamilies:
+						if TCID.parse_str(ssubfam) in TCID.parse_str(pfam):
+							final_subfamilies.add(ssubfam)
+				final_subfamilies = sorted(final_subfamilies)
+				random.shuffle(final_subfamilies)
+
+				#now finalize the tclist
+				tclist = []
+				for subfam in final_subfamilies:
+					#TODO: check for TMSs
+					tclist.append(subfam)
+					target_chains -= len(subfam2pdb[subfam])
+					if target_chains < 0: break
+
+			else:
+				warn('Invert specified, but superfamily definition file not found in {}/tcdb/. Falling back to random selection'.format(self.tmdatadir))
+				n = 0
+				tclist = []
+				with open('{}/tcmap.tsv'.format(self.tmdatadir)) as f:
+					for l in f:
+						sl = l.split('\t')
+						addme = True
+						for fam in rawtclist:
+							if TCID.parse_str(sl[0]) in TCID.parse_str(fam): 
+								print(sl[0], fam)
+								n += 1
+								addme = False
+						if addme: tclist.append(sl[0])
+				
+				random.shuffle(tclist)
+				tclist = tclist[:n]
+		else: tclist = rawtclist
+
 		self.get_pdbs(*tclist)
 		self.fetch_pdbs(force=force)
 
@@ -577,8 +677,23 @@ if __name__ == '__main__':
 	parser.add_argument('-f', action='store_true', help='Enables clobbering')
 	parser.add_argument('--fams', nargs='+', help='List of families to pick up')
 	parser.add_argument('-o', '--outdir', default='deuterocol1', help='Directory to send output to')
+	parser.add_argument('--invert', action='store_true', help='Obtain PDBs \033[1mNOT\033[0m in the list of families. Deuterocol 1 will try to assemble a dataset comparable in size to the families to be excluded')
+	parser.add_argument('--invert-inclusive', action='store_true', help='As --invert, but produces a Deuterocol1 directory including the excluded families')
 
 	args = parser.parse_args()
 
-	deut = Deuterocol1(tmdatadir=args.tmdatadir, outdir=args.outdir)
+	if args.invert and args.invert_inclusive: 
+		parser.print_usage()
+		exit(1)
+	elif args.invert: 
+		invert = True
+		inclusive = False
+	elif args.invert_inclusive: 
+		invert = True
+		inclusive = True
+	else: 
+		invert = False
+		inclusive = True
+
+	deut = Deuterocol1(tmdatadir=args.tmdatadir, outdir=args.outdir, invert=invert, inclusive=inclusive)
 	deut.run(*args.fams, force=args.f)
