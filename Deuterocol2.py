@@ -156,7 +156,7 @@ class Deuterocol2(object):
 			famlist2 = []
 			with open('{}/pdblist.json'.format(self.d1dir)) as f:
 				obj = json.loads(f.read())
-				for tcid in pdblistobj:
+				for tcid in obj:
 					found = True
 					for fam in famlist1:
 						if Deuterocol1.parse_str(tcid) in Deuterocol1.parse_str(fam): 
