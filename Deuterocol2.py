@@ -152,7 +152,7 @@ class Deuterocol2(object):
 		self.bundle = bundle
 
 	def run(self, famlist1, famlist2):
-		if famlist2 = ['auto']:
+		if famlist2 == ['auto']:
 			famlist2 = []
 			with open('{}/pdblist.json'.format(self.d1dir)) as f:
 				obj = json.loads(f.read())
