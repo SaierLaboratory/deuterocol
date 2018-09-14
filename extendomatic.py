@@ -62,6 +62,7 @@ class Dataset(object):
 		return obj
 
 	def stretch_data(self, f, n=1):
+		n = 1 if n is None else n
 
 		names = self.names[:]
 
@@ -113,7 +114,8 @@ class Dataset(object):
 			best[(qpdbc, spdbc)].append((mincov, rmsd, name, length, maxcov))
 
 		for k in best:
-			for extra in best[k][:n]:
+			if not best[k]: continue
+			for extra in sorted(best[k])[::-1][:n]:
 				mincov, rmsd, name, length, maxcov = extra
 				names.append(name)
 				rmsds.append(rmsd)
@@ -250,7 +252,7 @@ def plot_kde(kde, fig, ax, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100)
 
 	fig.colorbar(im, ax=ax)
 
-def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100, outfile='kde_plot.png'):
+def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100, density_outfile='kde_plot.png', scatter_outfile='kde_scatter.png'):
 	figure = Figure()
 	canvas = FigureCanvas(figure)
 	ax = []
@@ -261,21 +263,30 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 		#print(dir(ax[-1]))
 
 	plot_kde(positive, fig=figure, ax=ax[0], rmsdlim=rmsdlim, mincovlim=mincovlim, resolution=resolution)
-	ax[0].set_title('Positive (n={})'.format(len(negative.mincovs)))
+	ax[0].set_title('Positive (n={})'.format(len(positive.mincovs)))
 	plot_kde(negative, fig=figure, ax=ax[1], rmsdlim=rmsdlim, mincovlim=mincovlim, resolution=resolution)
 	ax[1].set_title('Negative (n={})'.format(len(negative.mincovs)))
 	plot_kde(unknown, fig=figure, ax=ax[2], rmsdlim=rmsdlim, mincovlim=mincovlim, resolution=resolution)
 	ax[2].set_title('Unknown (n={})'.format(len(unknown.mincovs)))
 
-	figure.savefig(outfile, dpi=600)
+	figure.savefig(density_outfile, dpi=600)
+	plot_rmsd_cov(positive, fig=figure, ax=ax[0])
+	plot_rmsd_cov(negative, fig=figure, ax=ax[1])
+	plot_rmsd_cov(unknown, fig=figure, ax=ax[2])
+	figure.savefig(scatter_outfile, dpi=600)
 
-def main(positivefn, negativefn, unknownfn, count=1000, outfile='density_plot.png', stretch=1):
+def plot_rmsd_cov(kde, fig, ax):
+	ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.1), marker='.', linewidth=0)
+
+def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density_plot.png', scatter_outfile='scatter_plot.png', stretch=1):
 	with open(positivefn) as f: positive = Dataset(f, count=count, mode='stretchone', marg=stretch)
 	positive.gen_rmsd_mincov_kde()
-	with open(negativefn) as f: negative = Dataset(f, count=count, mode='onebest')
+	with open(negativefn) as f: negative = Dataset(f, count=count, mode='stretchone', marg=stretch)
 	negative.gen_rmsd_mincov_kde()
-	with open(unknownfn) as f: unknown = Dataset(f, count=count, mode='onebest')
+	with open(unknownfn) as f: unknown = Dataset(f, count=count, mode='stretchone', marg=stretch)
 	unknown.gen_rmsd_mincov_kde()
+
+	print('#{}, {}, {}. stretch={}, n={}'.format(positivefn, negativefn, unknownfn, stretch, count))
 
 	min_rmsd, max_rmsd = 0.0, 6.0
 	min_mincov, max_mincov = 0.4, 1.0
@@ -285,7 +296,7 @@ def main(positivefn, negativefn, unknownfn, count=1000, outfile='density_plot.pn
 	print('#Alignment\tPosterior\tRMSD\tCoverage')
 	for post, name, rmsd, mincov in sorted(zip(unkposteriors, unknown.names, unknown.rmsds, unknown.mincovs))[::-1][:10]:
 		print('{}\t{:0.02e}\t{:0.1f}\t{:0.0%}'.format(name, post, rmsd, mincov))
-	plot_densities(positive, negative, unknown, rmsdlim=(min_rmsd, max_rmsd), mincovlim=(0.0, max_mincov), resolution=100, outfile=outfile)
+	plot_densities(positive, negative, unknown, rmsdlim=(min_rmsd, max_rmsd), mincovlim=(0.0, max_mincov), resolution=100, density_outfile=density_outfile, scatter_outfile=scatter_outfile)
 
 	#print('stats: ({} <= RMSD <= {}, {} <= minCov <= {}, n={})'.format(min_rmsd, max_rmsd, min_mincov, max_mincov, count*3))
 	#print('positive:', positive.kernel.integrate_box([min_rmsd, min_mincov], [max_rmsd, max_mincov]))
@@ -298,9 +309,9 @@ if __name__ == '__main__':
 	parser.add_argument('negative')
 	parser.add_argument('unknown')
 	parser.add_argument('-n', type=int, default=1000)
-	parser.add_argument('-o', default='density_plot.png')
-	parser.add_argument('-s', default=1)
+	parser.add_argument('-o', nargs=2, default=['density_plot.png', 'scatter_plot.png'])
+	parser.add_argument('-s', default=1, type=int)
 
 	args = parser.parse_args()
 
-	main(args.positive, args.negative, args.unknown, count=args.n, outfile=args.o, stretch=args.s)
+	main(args.positive, args.negative, args.unknown, count=args.n, density_outfile=args.o[0], stretch=args.s, scatter_outfile=args.o[1])

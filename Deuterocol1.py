@@ -471,6 +471,7 @@ class Deuterocol1(object):
 					elif fn.endswith('.pdb'): os.remove('{}/pdbs/{}'.format(self.outdir, fn))
 					elif fn.endswith('.pdb.gz'): os.remove('{}/pdbs/{}'.format(self.outdir, fn))
 			if dl: subprocess.call(cmd)
+			del tf
 		elif VERBOSITY: info('Skipped downloading PDBs')
 
 		for pdbid in sorted(pdbidlist):
@@ -480,6 +481,28 @@ class Deuterocol1(object):
 				cmd.append('{}/pdbs/{}.pdb.gz'.format(self.outdir, pdbid))
 				subprocess.call(cmd)
 
+		tf = tempfile.NamedTemporaryFile()
+		dl = False
+		for pdbid in sorted(pdbidlist):
+			if not os.path.isfile('{}/pdbs}/{}.pdb'.format(self.outdir, pdbid)): 
+				dl = True
+				tf.write('https://files.rcsb.org/download/{}.cif\n'.format(pdbid))
+				if VERBOSITY: info('Could not find {}.pdb. Attempting to fall back on {}.cif')
+		tf.flush()
+		if dl:
+			if VERBOSITY: info('Downloading CIFs...')
+			cmd = ['wget', '-P', '{}/pdbs'.format(self.outdir), '-i', tf.name, '--no-check-certificate']
+			if not force: cmd.append('-nc')
+			if dl: subprocess.call(cmd)
+			for fn in os.listdir('{}/pdbs'.format(self.outdir)):
+				if fn.endswith('.cif'):
+					p = subprocess.Popen(['pdbcur', 'xyzin', '{}/pdbs/{}'.format(self.outdir, fn), 'xyzout', '{}/pdbs/{}'.format(self.outdir, os.path.splitext(fn)[0] + '.pdb'), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+					out, err = p.communicate(input='write PDB')
+					print(out)
+					print(err, file=sys.stderr)
+					
+
+		del tf
 	def fetch_indices_method1(self):
 		''' Method 1: OPM, PDBTM, and STRIDE
 
