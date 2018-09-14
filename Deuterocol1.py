@@ -484,7 +484,7 @@ class Deuterocol1(object):
 		tf = tempfile.NamedTemporaryFile()
 		dl = False
 		for pdbid in sorted(pdbidlist):
-			if not os.path.isfile('{}/pdbs}/{}.pdb'.format(self.outdir, pdbid)): 
+			if not os.path.isfile('{}/pdbs/{}.pdb'.format(self.outdir, pdbid)): 
 				dl = True
 				tf.write('https://files.rcsb.org/download/{}.cif\n'.format(pdbid))
 				if VERBOSITY: info('Could not find {}.pdb. Attempting to fall back on {}.cif')
