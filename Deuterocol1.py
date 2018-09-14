@@ -496,10 +496,12 @@ class Deuterocol1(object):
 			if dl: subprocess.call(cmd)
 			for fn in os.listdir('{}/pdbs'.format(self.outdir)):
 				if fn.endswith('.cif'):
-					p = subprocess.Popen(['pdbcur', 'xyzin', '{}/pdbs/{}'.format(self.outdir, fn), 'xyzout', '{}/pdbs/{}'.format(self.outdir, os.path.splitext(fn)[0] + '.pdb'), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+					p = subprocess.Popen(['pdbcur', 'xyzin', '{}/pdbs/{}'.format(self.outdir, fn), 'xyzout', '{}/pdbs/{}'.format(self.outdir, os.path.splitext(fn)[0] + '.pdb')], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 					out, err = p.communicate(input='write PDB')
 					print(out)
 					print(err, file=sys.stderr)
+
+					os.remove('{}/pdbs/{}'.format(self.outdir, fn))
 					
 
 		del tf
