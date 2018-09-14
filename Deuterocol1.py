@@ -6,6 +6,7 @@ import argparse, os, re, tempfile, subprocess, json
 import urllib
 import sys
 import random
+import numpy as np
 random.seed(0)
 
 import Bio.Blast.NCBIXML
@@ -274,12 +275,14 @@ class TMData(object):
 
 #TODO: let's try using sqlite instead of scattered TSVs
 class Deuterocol1(object):
-	def __init__(self, tmdatadir, outdir, inclusive=True, invert=False):
+	def __init__(self, tmdatadir, outdir, inclusive=True, invert=False, min_tms=None, max_tms=None):
 		self.tmdatadir = tmdatadir
 		self.outdir = outdir
 		self.tmdata = TMData()
 		self.inclusive = inclusive
 		self.invert = invert
+		self.min_tms = min_tms
+		self.max_tms = max_tms
 
 	def get_pdb_sequences(self):
 		subunitlist = self.tmdata.get_distinct_subunits()
@@ -496,12 +499,17 @@ class Deuterocol1(object):
 		tmspans = {}
 
 		indextable = {}
+		tmcounts = []
 		for pdbid in sorted(pdbidlist):
 			unionspans[pdbid] = opmspans[pdbid].extend(pdbtmspans[pdbid])
 			tmspans[pdbid] = unionspans[pdbid].extend(stridespans[pdbid], selfish=True)
 			tmspans[pdbid].merge()
 
 			indextable[pdbid] = [[s.start, s.end] for s in tmspans[pdbid]]
+			tmcounts.append(len(tmspans[pdbid]))
+
+		if VERBOSITY: info('TMS stats: min = {}, mean = {:0.1f} +/- {:0.1f}, max = {}'.format(min(tmcounts), np.mean(tmcounts), np.std(tmcounts), max(tmcounts)))
+
 		with open('{}/indices.json'.format(self.outdir), 'w') as f:
 			f.write(json.dumps(indextable, indent=4))
 
@@ -565,6 +573,24 @@ class Deuterocol1(object):
 				spans[pdbid] = altspans[pdbid[:4]]
 		return spans
 
+	def get_rough_tmcounts(self):
+		tmcounts = {}
+		with open('{}/pdbtm/ASSIGNMENTS.TSV'.format(self.tmdatadir)) as f:
+			for l in f:
+				if not l.strip(): continue
+				elif l.startswith('#'): continue
+				sl = l.split('\t')
+				pdbid = sl[0][:4].upper() + sl[0][4:]
+				tmcounts[pdbid] = len(sl[1].split(','))
+		with open('{}/opm/ASSIGNMENTS.TSV'.format(self.tmdatadir)) as f:
+			for l in f:
+				if not l.strip(): continue
+				elif l.startswith('#'): continue
+				sl = l.split('\t')
+				pdbid = sl[0][:4].upper() + sl[0][4:]
+				tmcounts[pdbid] = len(sl[1].split(','))
+		return tmcounts
+				
 	def run(self, *rawtclist, **kwargs):
 		force = kwargs['force'] if 'force' in kwargs else False
 
@@ -581,6 +607,8 @@ class Deuterocol1(object):
 			if os.path.isfile('{}/tcdb/superfamily.json'.format(self.tmdatadir)):
 				with open('{}/tcdb/superfamily.json'.format(self.tmdatadir)) as f:
 					obj = json.loads(f.read())
+
+				tmcounts = self.get_rough_tmcounts()
 
 				potential_families = []
 				for superfam in obj: 
@@ -612,7 +640,7 @@ class Deuterocol1(object):
 					for l in f:
 						if not l.strip(): continue
 						elif l.startswith('#'): continue
-						sl = l.split('\t')
+						sl = l.strip().split('\t')
 						tcid = TCID.parse_str(sl[0])
 						fam = tcid[:3]
 						solved_families.add(str(fam))
@@ -630,10 +658,16 @@ class Deuterocol1(object):
 								target_chains += len(sl[1].split(','))
 
 				#the pool of subfamilies to draw from
+
+				beta = False
+				for tcid in rawtclist:
+					if tcid.startswith('1.B'): beta = True
+
 				final_subfamilies = set()
 				for pfam in potential_families:
 					for ssubfam in solved_subfamilies:
-						if TCID.parse_str(ssubfam) in TCID.parse_str(pfam):
+						if (not beta) and (pfam.startswith('1.B')): continue
+						elif TCID.parse_str(ssubfam) in TCID.parse_str(pfam):
 							final_subfamilies.add(ssubfam)
 				final_subfamilies = sorted(final_subfamilies)
 				random.shuffle(final_subfamilies)
@@ -642,9 +676,19 @@ class Deuterocol1(object):
 				tclist = []
 				for subfam in final_subfamilies:
 					#TODO: check for TMSs
-					tclist.append(subfam)
-					target_chains -= len(subfam2pdb[subfam])
-					if target_chains < 0: break
+
+					valid_pdbs = 0
+					if self.min_tms is not None or self.max_tms is not None:
+						for pdbid in subfam2pdb[subfam]:
+							if self.min_tms and (tmcounts[pdbid] < self.min_tms): valid_pdbs -= 1
+							elif self.max_tms and (tmcounts[pdbid] > self.max_tms): valid_pdbs -= 1
+							else: valid_pdbs += 1
+					else: valid_pdbs += 1
+					if valid_pdbs > 0:
+						tclist.append(subfam)
+						target_chains -= len(subfam2pdb[subfam])
+						if target_chains < 0: break
+				info('Generated a negative control consisting of subfamilies {}'.format(tclist))
 
 			else:
 				warn('Invert specified, but superfamily definition file not found in {}/tcdb/. Falling back to random selection'.format(self.tmdatadir))
@@ -663,6 +707,7 @@ class Deuterocol1(object):
 				
 				random.shuffle(tclist)
 				tclist = tclist[:n]
+			if self.inclusive: tclist += rawtclist
 		else: tclist = rawtclist
 
 		self.get_pdbs(*tclist)
@@ -679,6 +724,8 @@ if __name__ == '__main__':
 	parser.add_argument('-o', '--outdir', default='deuterocol1', help='Directory to send output to')
 	parser.add_argument('--invert', action='store_true', help='Obtain PDBs \033[1mNOT\033[0m in the list of families. Deuterocol 1 will try to assemble a dataset comparable in size to the families to be excluded')
 	parser.add_argument('--invert-inclusive', action='store_true', help='As --invert, but produces a Deuterocol1 directory including the excluded families')
+	parser.add_argument('--min-tms', default=None, type=int, help='Minimum number of TMSs for proteins in negative control (defaults to any)')
+	parser.add_argument('--max-tms', default=None, type=int, help='Maximum number of TMSs for proteins in negative control (defaults to any)')
 
 	args = parser.parse_args()
 
@@ -695,5 +742,5 @@ if __name__ == '__main__':
 		invert = False
 		inclusive = True
 
-	deut = Deuterocol1(tmdatadir=args.tmdatadir, outdir=args.outdir, invert=invert, inclusive=inclusive)
+	deut = Deuterocol1(tmdatadir=args.tmdatadir, outdir=args.outdir, invert=invert, inclusive=inclusive, min_tms=args.min_tms, max_tms=args.max_tms)
 	deut.run(*args.fams, force=args.f)
