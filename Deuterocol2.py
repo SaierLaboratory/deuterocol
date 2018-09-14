@@ -175,8 +175,11 @@ class Deuterocol2(object):
 		
 		if not os.path.isdir(self.outdir): os.mkdir(self.outdir)
 
+		done = []
 		for fam1 in sorted(pdblist[0]):
 			for fam2 in sorted(pdblist[1]):
+				if (fam1, fam2) in done: continue
+				else: done.append((fam1,fam2))
 				if not self.allow_internal and fam1 == fam2: continue
 				fam2pdb = [{fam1:pdblist[0][fam1]}, {fam2:pdblist[1][fam2]}]
 				x = Paragraph.load_d2(d2obj=self, pdblist=fam2pdb)
