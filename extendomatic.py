@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import print_function, division, generators
+from mpl_toolkits.mplot3d import Axes3D
 import argparse, json
 import numpy as np
 import scipy.stats
@@ -231,7 +232,7 @@ class Dataset(object):
 		values = np.vstack([self.rmsds, self.mincovs])
 		self.kernel = scipy.stats.gaussian_kde(values)
 		self.pdf = np.reshape(self.kernel(positions).T, rmsds.shape)
-		
+
 class Plot(object):
 	def __init__(self, fig=None, canvas=None, ax=None):
 		self.fig = Figure() if fig is None else fig
@@ -252,7 +253,82 @@ def plot_kde(kde, fig, ax, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100)
 
 	fig.colorbar(im, ax=ax)
 
-def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100, density_outfile='kde_plot.png', scatter_outfile='kde_scatter.png', text=''):
+def plot_3d_posteriors(pkde, nkde, fig, ax, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100):
+	X, Y = np.mgrid[rmsdlim[0]:rmsdlim[1]:resolution*1j, mincovlim[0]:mincovlim[1]:resolution*1j]
+	positions = np.vstack([X.ravel(), Y.ravel()])
+
+	posteriors = pkde.evaluate(positions) * len(pkde.mincovs) / (pkde.evaluate(positions) * len(pkde.mincovs) + nkde.evaluate(positions) * len(nkde.mincovs))
+
+	Z = np.reshape(posteriors.T, X.shape)
+
+	aspect = (rmsdlim[1] - rmsdlim[0]) / (mincovlim[1] - mincovlim[0]) / 1.414
+	surf = ax.plot_surface(X, Y, Z, cmap='magma', linewidth=0, antialiased=False)
+	ax.set_xlim(rmsdlim)
+	ax.set_ylim(mincovlim)
+	ax.set_zlim(0.0, 1.0)
+	ax.set_xlabel('RMSD')
+	ax.set_ylabel('Coverage')
+	ax.set_zlabel('p')
+	ax.set_title('Posteriors (n={}+{})'.format(len(pkde.mincovs), len(nkde.mincovs)))
+	fig.colorbar(surf, ax=ax)
+
+def plot_posteriors(pkde, nkde, fig, ax, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100):
+	X, Y = np.mgrid[rmsdlim[0]:rmsdlim[1]:resolution*1j, mincovlim[0]:mincovlim[1]:resolution*1j]
+	positions = np.vstack([X.ravel(), Y.ravel()])
+
+	posteriors = pkde.evaluate(positions) * len(pkde.mincovs) / (pkde.evaluate(positions) * len(pkde.mincovs) + nkde.evaluate(positions) * len(nkde.mincovs))
+
+	Z = np.reshape(posteriors.T, X.shape)
+
+	aspect = (rmsdlim[1] - rmsdlim[0]) / (mincovlim[1] - mincovlim[0]) / 1.414
+	im = ax.imshow(np.rot90(Z), cmap='magma', extent=rmsdlim+mincovlim, aspect=aspect)
+	ax.set_xlim(rmsdlim)
+	ax.set_ylim(mincovlim)
+	ax.set_xlabel('RMSD')
+	ax.set_ylabel('Coverage')
+
+	fig.colorbar(im, ax=ax)
+
+	ax.set_title('Posteriors (n={}+{})'.format(len(pkde.mincovs), len(nkde.mincovs)))
+	
+def plot_univariate_posteriors(pvalues, nvalues, fig, ax, lim, resolution=200, xlabel='', ylabel=''):
+	X = np.arange(lim[0], lim[1], (lim[1]-lim[0])/resolution)
+	pkernel = scipy.stats.gaussian_kde(pvalues)
+	nkernel = scipy.stats.gaussian_kde(nvalues)
+	posteriors = pkernel.evaluate(X)  * len(pvalues) / (pkernel.evaluate(X) * len(pvalues) + nkernel.evaluate(X) * len(nvalues))
+	ax.plot(X, posteriors)
+	ax.set_xlim(lim)
+	ax.set_ylim([0, 1])
+	ax.set_xlabel(xlabel)
+	ax.set_ylabel(ylabel)
+	#ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.1), marker='.', linewidth=0)
+
+
+def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100, density_outfile='kde_plot.png', scatter_outfile='kde_scatter.png', text='', posterior_outfile='kde_posterior.png', univar_post_outfile='univar_posterior.png', post_surf_outfile='posterior_surface.png'):
+
+	#posterior surface
+	figure = Figure()
+	canvas = FigureCanvas(figure)
+	ax = figure.add_subplot(1, 1, 1, projection='3d')
+	plot_3d_posteriors(positive, negative, fig=figure, ax=ax, rmsdlim=rmsdlim, mincovlim=mincovlim, resolution=resolution*8)
+	figure.savefig(post_surf_outfile, dpi=600)
+	exit()
+
+
+	#univariate posteriors
+	figure = Figure()
+	canvas = FigureCanvas(figure)
+	ax = []
+	plots = []
+	for i in range(2): 
+		ax.append(figure.add_subplot(1, 2, len(ax)+1))
+		plots.append(Plot(fig=figure, canvas=canvas, ax=ax[-1]))
+
+	plot_univariate_posteriors(positive.rmsds, negative.rmsds, figure, ax[0], lim=rmsdlim, resolution=2*resolution, xlabel='RMSD', ylabel='p')
+	plot_univariate_posteriors(positive.mincovs, negative.mincovs, figure, ax[1], lim=mincovlim, resolution=2*resolution, xlabel='Coverage', ylabel='p')
+	figure.savefig(univar_post_outfile)
+
+	#density plots
 	figure = Figure()
 	canvas = FigureCanvas(figure)
 	ax = []
@@ -278,10 +354,18 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 	plot_rmsd_cov(unknown, fig=figure, ax=ax[2])
 	figure.savefig(scatter_outfile, dpi=600)
 
+	#posteriors in 2D
+	figure = Figure()
+	canvas = FigureCanvas(figure)
+	ax = figure.add_subplot(1, 1, 1)
+	plot_posteriors(positive, negative, fig=figure, ax=ax, rmsdlim=rmsdlim, mincovlim=mincovlim, resolution=resolution)
+	figure.savefig(posterior_outfile, dpi=600)
+
 def plot_rmsd_cov(kde, fig, ax):
 	ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.1), marker='.', linewidth=0)
 
-def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density_plot.png', scatter_outfile='scatter_plot.png', stretch=1):
+
+def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density_plot.png', scatter_outfile='scatter_plot.png', stretch=1, posterior_outfile='posterior_plot.png', univar_post_outfile='univar_posterior_plot.png', post_surf_outfile='post_surf_plot.png'):
 	with open(positivefn) as f: positive = Dataset(f, count=count, mode='stretchone', marg=stretch)
 	positive.gen_rmsd_mincov_kde()
 	with open(negativefn) as f: negative = Dataset(f, count=count, mode='stretchone', marg=stretch)
@@ -308,7 +392,13 @@ def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density
 		text += '{:0.1f}'.format(rmsd).ljust(6)
 		text += '{:0.0%}\n'.format(mincov)
 	print(text)
-	plot_densities(positive, negative, unknown, rmsdlim=(min_rmsd, max_rmsd), mincovlim=(0.0, max_mincov), resolution=100, density_outfile=density_outfile, scatter_outfile=scatter_outfile, text=text.replace('\t', '        '))
+	plot_densities(positive, negative, unknown, rmsdlim=(min_rmsd, max_rmsd), mincovlim=(0.0, max_mincov), resolution=100, 
+		density_outfile=density_outfile, 
+		scatter_outfile=scatter_outfile, 
+		posterior_outfile=posterior_outfile, 
+			text=text, 
+		univar_post_outfile=univar_post_outfile, 
+		post_surf_outfile=post_surf_outfile)
 
 	#print('stats: ({} <= RMSD <= {}, {} <= minCov <= {}, n={})'.format(min_rmsd, max_rmsd, min_mincov, max_mincov, count*3))
 	#print('positive:', positive.kernel.integrate_box([min_rmsd, min_mincov], [max_rmsd, max_mincov]))
@@ -321,9 +411,9 @@ if __name__ == '__main__':
 	parser.add_argument('negative')
 	parser.add_argument('unknown')
 	parser.add_argument('-n', type=int, default=1000)
-	parser.add_argument('-o', nargs=2, default=['density_plot.png', 'scatter_plot.png'])
+	parser.add_argument('-o', nargs=5, default=['density_plot.png', 'scatter_plot.png', 'posterior_plot.png', 'univar_post_plot.png', 'post_surf_plot.png'])
 	parser.add_argument('-s', default=1, type=int)
 
 	args = parser.parse_args()
 
-	main(args.positive, args.negative, args.unknown, count=args.n, density_outfile=args.o[0], stretch=args.s, scatter_outfile=args.o[1])
+	main(args.positive, args.negative, args.unknown, count=args.n, density_outfile=args.o[0], stretch=args.s, scatter_outfile=args.o[1], posterior_outfile=args.o[2], univar_post_outfile=args.o[3], post_surf_outfile=args.o[4])
