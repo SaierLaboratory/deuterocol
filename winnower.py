@@ -45,7 +45,8 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False):
 			elif l.startswith('#'): continue
 
 			name, jstr = l.split('\t')
-			current = Alignment(name, jstr)
+			try: current = Alignment(name, jstr)
+			except ValueError: continue
 			query, qchain, qhel, vs, subject, schain, shel = name.split('_')
 			qhels = get_hel_list(qhel)
 			shels = get_hel_list(qhel)
