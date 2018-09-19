@@ -110,7 +110,8 @@ class Dataset(object):
 				elif seedshel[0] <= shel[1] <= seedshel[1]: continue
 			except KeyError: continue
 
-			obj = json.loads(sl[1])
+			try: obj = json.loads(sl[1])
+			except ValueError: continue
 			rmsd, length, mincov, maxcov = unpack_obj(obj)
 			best[(qpdbc, spdbc)].append((mincov, rmsd, name, length, maxcov))
 
