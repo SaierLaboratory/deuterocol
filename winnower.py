@@ -70,6 +70,7 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False):
 		#		currstrucs = (qpdbid, spdbid)
 		#		best[currstrucs] = [current]
 			if currstrucs == (qpdbid, spdbid):
+				print('if currstrucs == (qpdbid, spdbid)')
 				#if best[0].mincov < current.mincov:
 				#	best.insert(0, current)
 				#elif best[0].mincov == current.mincov:
@@ -81,10 +82,12 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False):
 				#if len(best) > (stretch + 1): best.pop(-1)
 				best.append(current)
 			elif currstrucs[0] is None:
+				print('elif currstrucs[0] is None')
 				currstrucs = (qpdbid, spdbid)
 
 				best.append(current)
 			else:
+				print('else')
 				donehels = [[], []]
 				for aln in sorted(best)[:stretch+1]:
 					if intersects(aln.qhels, donehels[0]) or intersects(aln.shels, donehels[1]): continue
