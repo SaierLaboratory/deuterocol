@@ -13,7 +13,11 @@ class Alignment(object):
 		self.shels = get_hel_list(self.shel)
 		obj = json.loads(jstr)
 		self.jstr = jstr.strip()
-		self.rmsd, self.length, self.mincov, self.maxcov = extendomatic.unpack_obj(obj)
+		data = extendomatic.unpack_obj(obj)
+		self.rmsd = data[0]
+		self.length = data[1]
+		self.mincov = data[2]
+		self.maxcov = data[3]
 	def __lt__(self, other):
 		if self.mincov > other.mincov: return True
 		elif self.mincov == other.mincov:
@@ -33,6 +37,7 @@ def intersects(l1, l2):
 
 
 def main(infile, outfile='/dev/stdout', stretch=0, append=False):
+	print(infile, outfile)
 	currstrucs = (None, None)
 	donehels = ([], [])
 	#best = {}
@@ -70,7 +75,6 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False):
 		#		currstrucs = (qpdbid, spdbid)
 		#		best[currstrucs] = [current]
 			if currstrucs == (qpdbid, spdbid):
-				print('if currstrucs == (qpdbid, spdbid)')
 				#if best[0].mincov < current.mincov:
 				#	best.insert(0, current)
 				#elif best[0].mincov == current.mincov:
@@ -82,12 +86,10 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False):
 				#if len(best) > (stretch + 1): best.pop(-1)
 				best.append(current)
 			elif currstrucs[0] is None:
-				print('elif currstrucs[0] is None')
 				currstrucs = (qpdbid, spdbid)
 
 				best.append(current)
 			else:
-				print('else')
 				donehels = [[], []]
 				for aln in sorted(best)[:stretch+1]:
 					if intersects(aln.qhels, donehels[0]) or intersects(aln.shels, donehels[1]): continue
