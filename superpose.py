@@ -201,16 +201,18 @@ class Superpose(object):
 
 		for famdir in self.famdirs:
 			lockfn = '{}/.lockfile'.format(famdir)
+			skip = False
 			try: 
 				if os.path.isfile(lockfn): 
 					with open(lockfn) as f:
 						warn('Found lockfile in {} dated {}, skipping'.format(famdir, f.read().strip()))
+						skip = True
 						continue
 				else:
 					with open(lockfn, 'w') as f: f.write(time.strftime('%Y-%m-%d %H:%M:%S'))
 				self.main(famdir)
 			finally: 
-				if os.path.isfile(lockfn): os.remove(lockfn)
+				if os.path.isfile(lockfn) and not skip: os.remove(lockfn)
 		info('Finished all assigned alignments')
 
 
