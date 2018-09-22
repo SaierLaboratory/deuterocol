@@ -49,7 +49,10 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False):
 			if not l.strip(): continue
 			elif l.startswith('#'): continue
 
-			name, jstr = l.split('\t')
+			try: name, jstr = l.split('\t')
+			except ValueError:
+				print(l)
+				continue
 			try: current = Alignment(name, jstr)
 			except ValueError: continue
 			query, qchain, qhel, vs, subject, schain, shel = name.split('_')
