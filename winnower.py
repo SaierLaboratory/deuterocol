@@ -55,6 +55,7 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False):
 				continue
 			try: current = Alignment(name, jstr)
 			except ValueError: continue
+			if current.rmsd == -1: continue
 			query, qchain, qhel, vs, subject, schain, shel = name.split('_')
 			qhels = get_hel_list(qhel)
 			shels = get_hel_list(qhel)

@@ -21,18 +21,53 @@ def unpack_obj(obj):
 	rmsd = obj['rmsd']
 	length = obj['length']
 
-	aligned = 0
-	for dist in obj['distances']: aligned += 0 if dist is None else 1
+	oldaligned = 0
+	for dist in obj['distances']: oldaligned += 0 if dist is None else 1
+
 	qpresent, spresent = obj['qpresent'], obj['spresent']
+
+	qaligned = []
+	saligned = []
+	for span in obj['qaligned']:
+		if span[0] is None: qaligned += [None] * span[1]
+		else: qaligned += list(range(span[0], span[1]+1))
+	for span in obj['saligned']:
+		if span[0] is None: saligned += [None] * span[1]
+		else: saligned += list(range(span[0], span[1]+1))
+
+	aligned = 0
+	qp = 0
+	sp = 0
+	for q, dist, s in zip(qaligned, obj['distances'], saligned):
+		#print(qpresent, q, dist, s, spresent)
+		if q is None: continue
+		elif (q < qpresent[0][0]) or (q > qpresent[0][1]): 
+			rmsd = -1
+			continue
+		else: qp += 1
+		if dist is None: continue
+		if s is None: continue
+		elif (s < spresent[0][0]) or (s > spresent[0][1]): 
+			rmsd = -1
+			continue
+		else: sp += 1
+		aligned += 1
+	#if oldaligned != aligned: print(oldaligned, aligned)
+
 	qpresent, spresent = qpresent[0][1] - qpresent[0][0] + 1, spresent[0][1] - spresent[0][0] + 1
 
-	minpresent = min(qpresent, spresent)
+	#old calc
+	#minpresent = min(qpresent, spresent)
+	minpresent = min(qp, sp)
 
-	covs = aligned/qpresent, aligned/spresent
+	#covs = aligned/qpresent, aligned/spresent
+	if (qp == 0) or (sp == 0):
+		covs = 0, 0
+	else: covs = aligned/qp, aligned/sp
 	mincov = min(covs)
 	maxcov = max(covs)
 
-	distances = [np.nan if x is None else x for x in obj['distances']]
+	#distances = [np.nan if x is None else x for x in obj['distances']]
 	#print(np.nanmax(distances))
 
 	return rmsd, length, mincov, maxcov, minpresent
@@ -221,6 +256,7 @@ class Dataset(object):
 			rmsd, length, mincov, maxcov, minpresent = unpack_obj(obj)
 			if minpresent < self.min_present: continue
 			if rmsd == -1: continue
+			if not mincov: continue
 
 			names.append(sl[0])
 			rmsds.append(rmsd)
@@ -438,7 +474,7 @@ def plot_univariate_posteriors(pvalues, nvalues, fig, ax, lim, resolution=200, x
 	ax.set_ylim([0, 1])
 	ax.set_xlabel(xlabel)
 	ax.set_ylabel(ylabel)
-	#ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.1), marker='.', linewidth=0)
+	#ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.004), marker='.', linewidth=0)
 
 
 #def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0., 1.), resolution=100, density_outfile='kde_plot.png', scatter_outfile='kde_scatter.png', text='', posterior_outfile='kde_posterior.png', univar_post_outfile='univar_posterior.png', post_surf_outfile='posterior_surface.png', unklabel='Unknown', dens_surf_outfile='dens_surf_plot.png', univar_dens_outfile='univar_dens_plot.png', rbw=(1.75,1.75,1.75), cbw=(1.25,2.,1.5), indep_post_outfile='indep_post_plot.png', dpi=1200):
@@ -459,11 +495,10 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 	ax = []
 
 	poscbws = (1., 2., 3., 4., 5., 6., 7., 8.)
-	poscbws = np.arange(1., 5., 0.5)
+	poscbws = np.arange(1., 7., 1.)
 	negcbws = (1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14.)
-	negcbws = np.arange(4., 7., 0.5)
+	negcbws = np.arange(1., 9., 1.)
 
-	exit()
 	for i in range(len(poscbws)*len(negcbws)):
 		ax.append(figure.add_subplot(len(poscbws), len(negcbws), i+1))
 		ax[-1].tick_params(labelsize=3.)
@@ -482,7 +517,6 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 			negative.kernel.set_bandwidth(bw_method=negative.kernel.factor / negcbw)
 		positive.kernel.set_bandwidth(bw_method=positive.kernel.factor / poscbw)
 	figure.savefig(posterior_outfile, dpi=dpi)
-	exit()
 
 	#univariate densities
 	figure = Figure()
@@ -511,7 +545,20 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 	ax[4].set_title('{} (n={})'.format(unklabel, len(unknown.mincovs)))
 	figure.savefig(univar_dens_outfile, dpi=dpi)
 
-	#univariate posteriors
+	##univariate posteriors
+	#figure = Figure()
+	#canvas = FigureCanvas(figure)
+	#ax = []
+	#plots = []
+	#for i in range(2): 
+	#	ax.append(figure.add_subplot(1, 2, len(ax)+1))
+	#	plots.append(Plot(fig=figure, canvas=canvas, ax=ax[-1]))
+
+	#plot_univariate_posteriors(positive.rmsds, negative.rmsds, figure, ax[0], lim=rmsdlim, resolution=2*resolution, xlabel='RMSD', ylabel='p', bw=rbw)
+	#plot_univariate_posteriors(positive.mincovs, negative.mincovs, figure, ax[1], lim=mincovlim, resolution=2*resolution, xlabel='Coverage', ylabel='p', bw=cbw)
+	#figure.savefig(univar_post_outfile, dpi=dpi)
+
+	#a bunch of univariate posteriors
 	figure = Figure()
 	canvas = FigureCanvas(figure)
 	ax = []
@@ -520,9 +567,11 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 		ax.append(figure.add_subplot(1, 2, len(ax)+1))
 		plots.append(Plot(fig=figure, canvas=canvas, ax=ax[-1]))
 
-	plot_univariate_posteriors(positive.rmsds, negative.rmsds, figure, ax[0], lim=rmsdlim, resolution=2*resolution, xlabel='RMSD', ylabel='p', bw=rbw)
-	plot_univariate_posteriors(positive.mincovs, negative.mincovs, figure, ax[1], lim=mincovlim, resolution=2*resolution, xlabel='Coverage', ylabel='p', bw=cbw)
-	figure.savefig(univar_post_outfile, dpi=dpi)
+	for pcbw in (1., 2., 3., 4., 5., 6.):
+		for ncbw in (8., 9.):
+			plot_univariate_posteriors(positive.rmsds, negative.rmsds, figure, ax[0], lim=rmsdlim, resolution=2*resolution, xlabel='RMSD', ylabel='p', bw=rbw)
+			plot_univariate_posteriors(positive.mincovs, negative.mincovs, figure, ax[1], lim=mincovlim, resolution=2*resolution, xlabel='Coverage', ylabel='p', bw=(pcbw, ncbw))
+			figure.savefig(univar_post_outfile, dpi=dpi)
 
 	##2D univariate posterior plot
 	#figure = Figure()
@@ -588,30 +637,38 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 	figure.savefig(dens_surf_outfile, dpi=dpi)
 
 	#3D univariate posterior plots
-	figure = Figure()
-	canvas = FigureCanvas(figure)
-	ax = figure.add_subplot(1, 1, 1, projection='3d')
-	plot_3d_independent_posteriors(positive, negative, figure, ax, rmsdlim=rmsdlim, mincovlim=mincovlim, resolution=BEAUTYFACTOR*resolution, rbw=rbw, cbw=cbw)
-	figure.savefig(univar_surf_outfile, dpi=dpi)
-	exit()
+	#figure = Figure()
+	#canvas = FigureCanvas(figure)
+	#ax = figure.add_subplot(1, 1, 1, projection='3d')
+	#plot_3d_independent_posteriors(positive, negative, figure, ax, rmsdlim=rmsdlim, mincovlim=mincovlim, resolution=BEAUTYFACTOR*resolution, rbw=rbw, cbw=cbw)
+	#figure.savefig(univar_surf_outfile, dpi=dpi)
 
 
 def plot_rmsd_cov(kde, fig, ax):
-	ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.1), marker='.', linewidth=0)
+	ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.01), marker='.', linewidth=0)
 
 
 def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density_plot.png', scatter_outfile='scatter_plot.png', stretch=1, posterior_outfile='posterior_plot.png', univar_post_outfile='univar_posterior_plot.png', post_surf_outfile='post_surf_plot.png', min_present=50, unklabel='Unknown', dens_surf_outfile='dens_surf_plot.png', univar_dens_outfile='univar_dens_plot.png', indep_post_outfile='indep_post_plot.png', univar_surf_outfile='univar_surf_plot.png', univar_postsurf_outfile='univar_postsurf_plot.png'):
 	with open(positivefn) as f: positive = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present)
+	info('Positives: n = {}'.format(len(positive.mincovs)))
 	positive.gen_rmsd_mincov_kde()
+
+	for name, rmsd, mincov in zip(positive.names, positive.rmsds, positive.mincovs):
+		#if mincov < 0.5: 
+		if mincov < 0.5:
+			print('{}\t{:0.2f}\t{:0.2%}'.format(name, rmsd, mincov))
+	#exit()
 	#with open(negativefn) as f: negative = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present)
 	with open(negativefn) as f: negative = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present)
+	info('Negatives: n = {}'.format(len(negative.mincovs)))
 	negative.gen_rmsd_mincov_kde()
 	with open(unknownfn) as f: unknown = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present)
 	unknown.gen_rmsd_mincov_kde()
+	info('Unknown: n = {}'.format(len(unknown.mincovs)))
 
 	text = '#{}, {}, {}. stretch={}, n={}\n'.format(positivefn, negativefn, unknownfn, stretch, count)
 
-	min_rmsd, max_rmsd = 0.0, 6.0
+	min_rmsd, max_rmsd = 0.0, 8.0
 	min_mincov, max_mincov = 0.4, 1.0
 
 	unkpoints = np.vstack([unknown.rmsds, unknown.mincovs])
@@ -632,8 +689,9 @@ def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density
 	#rbw = (2.25, 2.25, 2.25)
 	#cbw = (1., 2., 1.5)
 
-	cbw = (1., 1., 1.5)
+	cbw = (1., 2., 1.5)
 
+	text += '#Bandwidth multipliers: Pos {}, Neg {}\n'.format(cbw[0], cbw[1])
 	positive.kernel.set_bandwidth(bw_method=positive.kernel.factor*cbw[0])
 	negative.kernel.set_bandwidth(bw_method=positive.kernel.factor*cbw[1])
 	unknown.kernel.set_bandwidth(bw_method=positive.kernel.factor*cbw[2])
@@ -644,9 +702,14 @@ def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density
 	text += 'Posterior'.ljust(12)
 	text += 'RMSD'.ljust(6)
 	text += 'Coverage\n'
-	for name, post, rmsd in zip(unknown.names, unkposteriors, unknown.rmsds): 
-		if post < 0.7: continue
-		print('{}\t{}\t{}'.format(name, post, rmsd))
+	#for name, post, rmsd in zip(unknown.names, unkposteriors, unknown.rmsds): 
+		#if post < 0.7: continue
+		#print('{}\t{}\t{}'.format(name, post, rmsd))
+
+	positive.kernel.set_bandwidth(bw_method=positive.kernel.factor/cbw[0])
+	negative.kernel.set_bandwidth(bw_method=positive.kernel.factor/cbw[1])
+	unknown.kernel.set_bandwidth(bw_method=positive.kernel.factor/cbw[2])
+
 	for post, name, rmsd, mincov in sorted(zip(unkposteriors, unknown.names, unknown.rmsds, unknown.mincovs))[::-1][:10]:
 		#text += '{}\t{:0.02e}\t{:0.1f}\t{:0.0%}\n'.format(name, post, rmsd, mincov)
 		text += '{}'.format(name).ljust(32)
