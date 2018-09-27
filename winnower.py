@@ -63,7 +63,7 @@ def count_covered_tmss(spans, interval, threshold=10):
 		if n > threshold: tmss += 1
 	return tmss
 
-def main(infile, outfile='/dev/stdout', stretch=0, append=False, tmdatadir='tmdata'):
+def main(infile, outfile='/dev/stdout', stretch=0, append=False, tmdatadir='tmdata', dthreshold=4):
 	print(infile, outfile)
 	if not tmdatadir: tmdatadir = None
 	currstrucs = (None, None)
@@ -84,7 +84,7 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False, tmdatadir='tmda
 			except ValueError:
 				print(l)
 				continue
-			try: current = Alignment(name, jstr, tmdatadir=tmdatadir)
+			try: current = Alignment(name, jstr, tmdatadir=tmdatadir, dthreshold=dthreshold)
 			except ValueError: continue
 			if current.rmsd == -1: continue
 			query, qchain, qhel, vs, subject, schain, shel = name.split('_')
@@ -159,7 +159,8 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument('infile', help='a single superposition TSV or a deuterocol2 root directory')
-	parser.add_argument('-s', default=0, type=int, help='how many alignments to keep for each pair of structures')
+	parser.add_argument('-d', default=4, type=float, help='distance threshold (default:4)')
+	parser.add_argument('-s', default=0, type=int, help='how many extra alignments to keep for each pair of structures (default:0)')
 	parser.add_argument('outfile', nargs='?', default='/dev/stdout')
 	parser.add_argument('--tmdatadir', nargs='?', default='tmdata')
 
@@ -177,5 +178,5 @@ if __name__ == '__main__':
 			for spfn in os.listdir('{}/{}/superpositions'.format(args.infile, famvfam)):
 				if spfn.startswith('.'): continue
 				elif not spfn.lower().endswith('tsv'): continue
-				main('{}/{}/superpositions/{}'.format(args.infile, famvfam, spfn), args.outfile, stretch=args.s, append=True, tmdatadir=args.tmdatadir)
-	else: main(args.infile, args.outfile, stretch=args.s, append=False, tmdatadir=args.tmdatadir)
+				main('{}/{}/superpositions/{}'.format(args.infile, famvfam, spfn), args.outfile, stretch=args.s, append=True, tmdatadir=args.tmdatadir, dthreshold=args.d)
+	else: main(args.infile, args.outfile, stretch=args.s, append=False, tmdatadir=args.tmdatadir, dthreshold=args.d)
