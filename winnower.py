@@ -63,7 +63,7 @@ def count_covered_tmss(spans, interval, threshold=10):
 		if n > threshold: tmss += 1
 	return tmss
 
-def main(infile, outfile='/dev/stdout', stretch=0, append=False, tmdatadir='tmdata', dthreshold=4):
+def main(infile, outfile='/dev/stdout', stretch=0, append=False, tmdatadir='tmdata', dthreshold=4, mincov=0.):
 	print(infile, outfile)
 	if not tmdatadir: tmdatadir = None
 	currstrucs = (None, None)
@@ -87,6 +87,9 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False, tmdatadir='tmda
 			try: current = Alignment(name, jstr, tmdatadir=tmdatadir, dthreshold=dthreshold)
 			except ValueError: continue
 			if current.rmsd == -1: continue
+			if current.mincov < mincov: continue
+			#print(name, current.rmsd, current.mincov)
+			
 			query, qchain, qhel, vs, subject, schain, shel = name.split('_')
 			qhels = get_hel_list(qhel)
 			shels = get_hel_list(qhel)
@@ -109,7 +112,6 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False, tmdatadir='tmda
 				if stmscount <= 2: skip = True
 			if skip: continue
 
-			
 		#	if currstrucs == (qpdbid, spdbid):
 		#		if best[currstrucs][0].mincov < current.mincov:
 		#			best[currstrucs].insert(0, current)
@@ -160,6 +162,7 @@ if __name__ == '__main__':
 
 	parser.add_argument('infile', help='a single superposition TSV or a deuterocol2 root directory')
 	parser.add_argument('-d', default=4, type=float, help='distance threshold (default:4)')
+	parser.add_argument('--min-cov', default=0., type=float, help='minimum coverage')
 	parser.add_argument('-s', default=0, type=int, help='how many extra alignments to keep for each pair of structures (default:0)')
 	parser.add_argument('outfile', nargs='?', default='/dev/stdout')
 	parser.add_argument('--tmdatadir', nargs='?', default='tmdata')
@@ -178,5 +181,5 @@ if __name__ == '__main__':
 			for spfn in os.listdir('{}/{}/superpositions'.format(args.infile, famvfam)):
 				if spfn.startswith('.'): continue
 				elif not spfn.lower().endswith('tsv'): continue
-				main('{}/{}/superpositions/{}'.format(args.infile, famvfam, spfn), args.outfile, stretch=args.s, append=True, tmdatadir=args.tmdatadir, dthreshold=args.d)
-	else: main(args.infile, args.outfile, stretch=args.s, append=False, tmdatadir=args.tmdatadir, dthreshold=args.d)
+				main('{}/{}/superpositions/{}'.format(args.infile, famvfam, spfn), args.outfile, stretch=args.s, append=True, tmdatadir=args.tmdatadir, dthreshold=args.d, mincov=args.min_cov)
+	else: main(args.infile, args.outfile, stretch=args.s, append=False, tmdatadir=args.tmdatadir, dthreshold=args.d, mincov=args.min_cov)
