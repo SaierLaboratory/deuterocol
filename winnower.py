@@ -6,14 +6,14 @@ import argparse, os, sys, json
 import extendomatic
 
 class Alignment(object):
-	def __init__(self, name, jstr, tmdatadir=None):
+	def __init__(self, name, jstr, tmdatadir=None, dthreshold=4):
 		self.name = name
 		self.query, self.qchain, self.qhel, vs, self.subject, self.schain, self.shel = name.split('_')
 		self.qhels = get_hel_list(self.qhel)
 		self.shels = get_hel_list(self.shel)
 		obj = json.loads(jstr)
 		self.jstr = jstr.strip()
-		data = extendomatic.unpack_obj(obj)
+		data = extendomatic.unpack_obj(obj, dthreshold=dthreshold)
 		self.rmsd = data[0]
 		self.length = data[1]
 		self.mincov = data[2]

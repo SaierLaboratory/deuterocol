@@ -17,7 +17,7 @@ from matplotlib.figure import Figure
 
 def info(*things): print('[INFO]:', *things, file=sys.stderr)
 
-def unpack_obj(obj):
+def unpack_obj(obj, dthreshold=4):
 	rmsd = obj['rmsd']
 	length = obj['length']
 
@@ -40,6 +40,7 @@ def unpack_obj(obj):
 	sp = 0
 	for q, dist, s in zip(qaligned, obj['distances'], saligned):
 		#print(qpresent, q, dist, s, spresent)
+		if (dthreshold is not None) and (dist is not None) and dist > dthreshold: continue
 		if q is None: continue
 		elif (q < qpresent[0][0]) or (q > qpresent[0][1]): 
 			rmsd = -1
@@ -252,7 +253,8 @@ class Dataset(object):
 			elif l.startswith('#'): continue
 
 			sl = l.split('\t')
-			obj = json.loads(sl[1])
+			try: obj = json.loads(sl[1])
+			except ValueError: print(sl[1])
 			rmsd, length, mincov, maxcov, minpresent = unpack_obj(obj)
 			if minpresent < self.min_present: continue
 			if rmsd == -1: continue
@@ -645,7 +647,7 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 
 
 def plot_rmsd_cov(kde, fig, ax):
-	ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.01), marker='.', linewidth=0)
+	ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.02), marker='.', linewidth=0)
 
 
 def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density_plot.png', scatter_outfile='scatter_plot.png', stretch=1, posterior_outfile='posterior_plot.png', univar_post_outfile='univar_posterior_plot.png', post_surf_outfile='post_surf_plot.png', min_present=50, unklabel='Unknown', dens_surf_outfile='dens_surf_plot.png', univar_dens_outfile='univar_dens_plot.png', indep_post_outfile='indep_post_plot.png', univar_surf_outfile='univar_surf_plot.png', univar_postsurf_outfile='univar_postsurf_plot.png'):
@@ -655,7 +657,7 @@ def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density
 
 	for name, rmsd, mincov in zip(positive.names, positive.rmsds, positive.mincovs):
 		#if mincov < 0.5: 
-		if mincov < 0.5:
+		if mincov < 0.67:
 			print('{}\t{:0.2f}\t{:0.2%}'.format(name, rmsd, mincov))
 	#exit()
 	#with open(negativefn) as f: negative = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present)
