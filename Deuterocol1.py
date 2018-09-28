@@ -530,10 +530,12 @@ class Deuterocol1(object):
 			tmspans[pdbid] = unionspans[pdbid].extend(stridespans[pdbid], selfish=True)
 			tmspans[pdbid].merge()
 
+			if len(tmspans[pdbid]) <= 2: continue
 			indextable[pdbid] = [[s.start, s.end] for s in tmspans[pdbid]]
+			#print(len(tmspans[pdbid]))
 			tmcounts.append(len(tmspans[pdbid]))
 
-		if VERBOSITY: info('TMS stats: min = {}, mean = {:0.1f} +/- {:0.1f}, max = {}'.format(min(tmcounts), np.mean(tmcounts), np.std(tmcounts), max(tmcounts)))
+		if VERBOSITY: info('TMS stats: N = {}, min = {}, mean = {:0.1f} +/- {:0.1f}, max = {}'.format(len(tmcounts), min(tmcounts), np.mean(tmcounts), np.std(tmcounts), max(tmcounts)))
 
 		with open('{}/indices.json'.format(self.outdir), 'w') as f:
 			f.write(json.dumps(indextable, indent=4))

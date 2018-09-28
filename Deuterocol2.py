@@ -70,7 +70,11 @@ class Paragraph(object):
 		for fam1 in self.fams1:
 			for fam2 in self.fams2:
 				for pdb1 in self.fams1[fam1]:
+					try: indices[pdb1]
+					except KeyError: continue
 					for pdb2 in self.fams2[fam2]:
+						try: indices[pdb2]
+						except KeyError: continue
 						#XXX not sure if this works properly for short proteins
 						if len(indices[pdb1]) <= self.bundle: endtms1 = 1
 						else: endtms1 = len(indices[pdb1]) - self.bundle  + 1
