@@ -34,13 +34,13 @@ class Alignment(object):
 		''' maximizes coverage '''
 		return self.mincov
 
-	def _score_cartesian(self): 
+	def _score_cartesian(self, covweight=1): 
 		''' minimizes distance to (RMSD=0.0, mincov=1.0) '''
-		return (self.rmsd)**2 + (1.0 - self.mincov)**2
+		return (self.rmsd)**2 + covweight*(1.0 - self.mincov)**2
 
 	def get_score(self):
 		''' scores an alignment '''
-		return self._score_cartesian()
+		return self._score_cartesian(covweight=8)
 
 	def __lt__(self, other):
 		if self.get_score() < other.get_score(): return True
