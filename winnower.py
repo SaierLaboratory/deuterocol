@@ -22,11 +22,28 @@ class Alignment(object):
 		self.qpresent = obj['qpresent']
 		self.spresent = obj['spresent']
 
+	#def __lt__(self, other):
+	#	''' maximizes coverage '''
+	#	if self.mincov > other.mincov: return True
+	#	elif self.mincov == other.mincov:
+	#		if self.rmsd < other.rmsd: return True
+	#		else: return False
+	#	else: return False
+
+	def _score_mincov(self): 
+		''' maximizes coverage '''
+		return self.mincov
+
+	def _score_cartesian(self): 
+		''' minimizes distance to (RMSD=0.0, mincov=1.0) '''
+		return (self.rmsd)**2 + (1.0 - self.mincov)**2
+
+	def get_score(self):
+		''' scores an alignment '''
+		return self._score_cartesian()
+
 	def __lt__(self, other):
-		if self.mincov > other.mincov: return True
-		elif self.mincov == other.mincov:
-			if self.rmsd < other.rmsd: return True
-			else: return False
+		if self.get_score() < other.get_score(): return True
 		else: return False
 
 def get_hel_list(s):
