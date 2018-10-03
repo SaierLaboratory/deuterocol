@@ -40,7 +40,7 @@ def unpack_obj(obj, dthreshold=4):
 	sp = 0
 	for q, dist, s in zip(qaligned, obj['distances'], saligned):
 		#print(qpresent, q, dist, s, spresent)
-		if (dthreshold is not None) and (dist is not None) and dist > dthreshold: continue
+		#print(q, dist, s, dthreshold, (dthreshold is not None) and (dist is not None) and dist <= dthreshold)
 		if q is None: continue
 		elif (q < qpresent[0][0]) or (q > qpresent[0][1]): 
 			rmsd = -1
@@ -52,6 +52,7 @@ def unpack_obj(obj, dthreshold=4):
 			rmsd = -1
 			continue
 		else: sp += 1
+		if (dthreshold is not None) and (dist is not None) and dist > dthreshold: continue
 		aligned += 1
 	#if oldaligned != aligned: print(oldaligned, aligned)
 
@@ -74,7 +75,7 @@ def unpack_obj(obj, dthreshold=4):
 	return rmsd, length, mincov, maxcov, minpresent
 
 class Dataset(object):
-	def __init__(self, f, count=1000, mode=None, marg=None, min_present=50, dthreshold=4):
+	def __init__(self, f, count=1000, mode=None, marg=None, min_present=50, dthreshold=4, min_mincov=0.):
 		self.names = []
 		self.rmsds = []
 		self.lengths = []
@@ -87,6 +88,7 @@ class Dataset(object):
 		self.pdf = None
 
 		self.dthreshold = dthreshold
+		self.min_mincov = min_mincov
 
 		if mode == 'onebest': 
 			info('Using selection criterion ONEBEST')
@@ -261,6 +263,7 @@ class Dataset(object):
 			if minpresent < self.min_present: continue
 			if rmsd == -1: continue
 			if not mincov: continue
+			if mincov < self.min_mincov: continue
 
 			names.append(sl[0])
 			rmsds.append(rmsd)
@@ -499,9 +502,9 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 	ax = []
 
 	poscbws = (1., 2., 3., 4., 5., 6., 7., 8.)
-	poscbws = np.arange(1., 7., 1.)
+	poscbws = np.arange(1., 8., 1.)
 	negcbws = (1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14.)
-	negcbws = np.arange(1., 9., 1.)
+	negcbws = np.arange(1., 11., 1.)
 
 	for i in range(len(poscbws)*len(negcbws)):
 		ax.append(figure.add_subplot(len(poscbws), len(negcbws), i+1))
@@ -649,11 +652,11 @@ def plot_densities(positive, negative, unknown, rmsdlim=(0., 6.), mincovlim=(0.,
 
 
 def plot_rmsd_cov(kde, fig, ax):
-	ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.02), marker='.', linewidth=0)
+	ax.plot(kde.rmsds, kde.mincovs, c=(1., 1., 1., 0.1), marker='.', linewidth=0)
 
 
-def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density_plot.png', scatter_outfile='scatter_plot.png', stretch=1, posterior_outfile='posterior_plot.png', univar_post_outfile='univar_posterior_plot.png', post_surf_outfile='post_surf_plot.png', min_present=50, unklabel='Unknown', dens_surf_outfile='dens_surf_plot.png', univar_dens_outfile='univar_dens_plot.png', indep_post_outfile='indep_post_plot.png', univar_surf_outfile='univar_surf_plot.png', univar_postsurf_outfile='univar_postsurf_plot.png', dthreshold=4):
-	with open(positivefn) as f: positive = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present, dthreshold=dthreshold)
+def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density_plot.png', scatter_outfile='scatter_plot.png', stretch=1, posterior_outfile='posterior_plot.png', univar_post_outfile='univar_posterior_plot.png', post_surf_outfile='post_surf_plot.png', min_present=50, unklabel='Unknown', dens_surf_outfile='dens_surf_plot.png', univar_dens_outfile='univar_dens_plot.png', indep_post_outfile='indep_post_plot.png', univar_surf_outfile='univar_surf_plot.png', univar_postsurf_outfile='univar_postsurf_plot.png', dthreshold=4, min_mincov=0.0):
+	with open(positivefn) as f: positive = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present, dthreshold=dthreshold, min_mincov=min_mincov)
 	info('Positives: n = {}'.format(len(positive.mincovs)))
 	positive.gen_rmsd_mincov_kde()
 
@@ -663,17 +666,18 @@ def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density
 			print('{}\t{:0.2f}\t{:0.2%}'.format(name, rmsd, mincov))
 	#exit()
 	#with open(negativefn) as f: negative = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present)
-	with open(negativefn) as f: negative = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present, dthreshold=dthreshold)
+	with open(negativefn) as f: negative = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present, dthreshold=10, min_mincov=min_mincov)
 	info('Negatives: n = {}'.format(len(negative.mincovs)))
 	negative.gen_rmsd_mincov_kde()
-	with open(unknownfn) as f: unknown = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present, dthreshold=dthreshold)
+	with open(unknownfn) as f: unknown = Dataset(f, count=count, mode='any', marg=stretch, min_present=min_present, dthreshold=dthreshold, min_mincov=min_mincov)
 	unknown.gen_rmsd_mincov_kde()
 	info('Unknown: n = {}'.format(len(unknown.mincovs)))
 
 	text = '#{}, {}, {}. stretch={}, n={}\n'.format(positivefn, negativefn, unknownfn, stretch, count)
 
 	min_rmsd, max_rmsd = 0.0, 8.0
-	min_mincov, max_mincov = 0.4, 1.0
+	#min_mincov, max_mincov = 0.4, 1.0
+	max_mincov = 1.0
 
 	unkpoints = np.vstack([unknown.rmsds, unknown.mincovs])
 
@@ -696,6 +700,7 @@ def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density
 	cbw = (1., 2., 1.5)
 
 	text += '#Bandwidth multipliers: Pos {}, Neg {}\n'.format(cbw[0], cbw[1])
+	text += '#Distance threshold: {} \AA\n'.format(dthreshold)
 	positive.kernel.set_bandwidth(bw_method=positive.kernel.factor*cbw[0])
 	negative.kernel.set_bandwidth(bw_method=positive.kernel.factor*cbw[1])
 	unknown.kernel.set_bandwidth(bw_method=positive.kernel.factor*cbw[2])
@@ -721,7 +726,24 @@ def main(positivefn, negativefn, unknownfn, count=1000, density_outfile='density
 		text += '{:0.4f}'.format(rmsd).ljust(9)
 		text += '{:0.0%}\n'.format(mincov)
 	print(text)
-	plot_densities(positive, negative, unknown, rmsdlim=(min_rmsd, max_rmsd), mincovlim=(0.0, max_mincov), resolution=100, 
+#	plot_densities(positive, negative, unknown, rmsdlim=(min_rmsd, max_rmsd), 
+#		mincovlim=(0.0, max_mincov), resolution=100, 
+#		unklabel=unklabel, 
+#		density_outfile=density_outfile, 
+#		scatter_outfile=scatter_outfile, 
+#		posterior_outfile=posterior_outfile, 
+#			text=text, 
+#		univar_dens_outfile=univar_dens_outfile, 
+#		univar_post_outfile=univar_post_outfile, 
+#		post_surf_outfile=post_surf_outfile,
+#		dens_surf_outfile=dens_surf_outfile, 
+#		indep_post_outfile=indep_post_outfile,
+#		univar_surf_outfile=univar_surf_outfile,
+#		rbw=rbw, 
+#		cbw=cbw)
+
+	plot_densities(positive, negative, unknown, rmsdlim=(min_rmsd, max_rmsd), 
+		mincovlim=(min_mincov, max_mincov), resolution=100, 
 		unklabel=unklabel, 
 		density_outfile=density_outfile, 
 		scatter_outfile=scatter_outfile, 
@@ -756,6 +778,7 @@ if __name__ == '__main__':
 	parser.add_argument('--beauty-factor', type=int, default=BEAUTYFACTOR, help='extra resolution for 3d plots (warning: drastically increases runtime)')
 
 	parser.add_argument('--prior', type=float)
+	parser.add_argument('--min-mincov', type=float, default=0.0)
 
 	args = parser.parse_args()
 
@@ -764,4 +787,4 @@ if __name__ == '__main__':
 
 	BEAUTYFACTOR = 8 if args.beauty_factor is None else args.beauty_factor
 
-	main(args.positive, args.negative, args.unknown, count=args.n, density_outfile=args.o[0], stretch=args.s, scatter_outfile=args.o[1], posterior_outfile=args.o[2], univar_post_outfile=args.o[3], post_surf_outfile=args.o[4], dens_surf_outfile=args.o[5], min_present=args.min_present, unklabel=args.unklabel, univar_dens_outfile=args.o[6], indep_post_outfile=args.o[7], univar_surf_outfile=args.o[8], univar_postsurf_outfile=args.o[9], dthreshold=args.d)
+	main(args.positive, args.negative, args.unknown, count=args.n, density_outfile=args.o[0], stretch=args.s, scatter_outfile=args.o[1], posterior_outfile=args.o[2], univar_post_outfile=args.o[3], post_surf_outfile=args.o[4], dens_surf_outfile=args.o[5], min_present=args.min_present, unklabel=args.unklabel, univar_dens_outfile=args.o[6], indep_post_outfile=args.o[7], univar_surf_outfile=args.o[8], univar_postsurf_outfile=args.o[9], dthreshold=args.d, min_mincov=args.min_mincov)
