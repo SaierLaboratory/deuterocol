@@ -49,13 +49,15 @@ class Paragraph(object):
 		with open('{}/config/tcmap.json'.format(self.outdir), 'w') as f: f.write(json.dumps(self.tcmap))
 
 		indices = {}
+		g = open('{}/config/indices.json'.format(self.outdir), 'w')
 		with open('{}/indices.json'.format(self.d1dir)) as f: 
 			indobj = json.loads(f.read())
 			#for pdbid in sorted(indobj): indices[pdbid] = Deuterocol1.Spans.parse_json(indobj[pdbid])
 			for pdbid in sorted(indobj): 
 				indices[pdbid] = Deuterocol1.Spans()
 				for span in indobj[pdbid]: indices[pdbid].add(span)
-
+				g.write('{}\t{}\n'.format(pdbid, indobj[pdbid]))
+				
 		if self.loopless: sourcedir = '{}/pdbs_loopless'.format(self.d1dir)
 		else: sourcedir = '{}/pdbs'.format(self.d1dir)
 
@@ -85,6 +87,7 @@ class Paragraph(object):
 								#print(fam1, pdb1, '{}-{}'.format(bundle1+1, bundle1+self.bundle-1+1), pdb2, '{}-{}'.format(bundle2+1, bundle2+self.bundle-1+1), fam2)
 								qstart = indices[pdb1][bundle1].start
 								if bundle1 + self.bundle - 1 >= len(indices[pdb1]): qend = indices[pdb1][-1].end
+									
 								else: qend = indices[pdb1][bundle1 + self.bundle - 1].end
 
 								sstart = indices[pdb2][bundle2].start
@@ -92,16 +95,16 @@ class Paragraph(object):
 								else: send = indices[pdb2][bundle2 + self.bundle - 1].end
 								commands.append({'name':'{}_h{}-{}_vs_{}_h{}-{}'.format( \
 										pdb1, \
-										bundle1+1, bundle1+self.bundle-1+1, \
+										bundle1+1, min(len(indices[pdb1]), bundle1+self.bundle-1+1), \
 										pdb2, \
-										bundle2+1, bundle2+self.bundle-1+1, \
+										bundle2+1, min(len(indices[pdb2]), bundle2+self.bundle-1+1), \
 									), \
 									'query': pdb1[:4], \
 									'subject': pdb2[:4], \
 									#'qhelices': list(range(bundle1+1, bundle1+1+self.bundle)), \
 									#'shelices': list(range(bundle2+1, bundle2+1+self.bundle)), \
-									'qhelices': [bundle1+1, bundle1+self.bundle], \
-									'shelices': [bundle2+1, bundle2+self.bundle], \
+									'qhelices': [bundle1+1, min(len(indices[pdb1]), bundle1+self.bundle)], \
+									'shelices': [bundle2+1, min(len(indices[pdb2]), bundle2+self.bundle)], \
 									#'qfam': fam1, \
 									#'sfam': fam2, \
 									'bundle': self.bundle, \

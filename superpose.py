@@ -162,7 +162,7 @@ class Superpose(object):
 
 		n = 0
 		t = time.time()
-		if VERBOSITY: info('Performing {} alignments...'.format(todo))
+		if VERBOSITY: info('Performing {} alignments with SSM Superpose...'.format(todo))
 		if todo:
 			with open('{}/superpositions/sp_all.tsv'.format(famdir), 'a') as f:
 				with open('{}/config/agenda.json'.format(famdir)) as g:
