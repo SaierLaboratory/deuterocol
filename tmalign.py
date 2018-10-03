@@ -167,7 +167,7 @@ class TMalign(superpose.Superpose):
 						query, qchain, qhel, vs, subject, schain, shel = obj['name'].split('_')
 						sp.qhel = [int(x) for x in qhel[1:].split('-')]
 						sp.shel = [int(x) for x in shel[1:].split('-')]
-						f.write('{}\t{}\n'.format(obj['name'], sp.dump_json())
+						f.write('{}\t{}\n'.format(obj['name'], sp.dump_json()))
 						n += 1
 		info('Finished alignments for {}'.format(famdir))
 
