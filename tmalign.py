@@ -18,8 +18,9 @@ def error(*things):
 	exit(1)
 
 class TMalign(superpose.Superpose):
-	def __init__(self, d2dir='deuterocol2', force=False):
+	def __init__(self, d2dir='deuterocol2', force=False, skip_cut=True):
 		superpose.Superpose.__init__(self, d2dir=d2dir, force=force)
+		self.skip_cut = skip_cut
 
 	def main(self, famdir):
 		done = []
@@ -233,7 +234,7 @@ class TMalign(superpose.Superpose):
 			if not os.path.isdir('{}/../cut_pdbs'.format(famdir)):
 				os.mkdir('{}/../cut_pdbs'.format(famdir))
 			if VERBOSITY: info('Cutting PDBs for {}'.format(famdir))
-			self.cut_pdbs(famdir)
+			if not self.skip_cut: self.cut_pdbs(famdir)
 
 		for famdir in self.famdirs:
 			lockfn = '{}/.lockfile'.format(famdir)
@@ -255,10 +256,11 @@ class TMalign(superpose.Superpose):
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
+	parser.add_argument('--skip-cut', action='store_true')
 	parser.add_argument('d2dir', default='deuterocol2', help='Deuterocol2 directory (contains config/, pdbs/, and superpositions/)')
 
 	args = parser.parse_args()
 
 
-	x = TMalign(d2dir=args.d2dir)
+	x = TMalign(d2dir=args.d2dir, skip_cut=args.skip_cut)
 	x.run()
