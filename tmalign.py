@@ -5,6 +5,7 @@ from __future__ import print_function, division, generators
 import argparse, json, os, subprocess, re, sys, time
 import tempfile
 import superpose
+import shutil
 
 
 VERBOSITY = 1
@@ -46,7 +47,9 @@ class TMalign(superpose.Superpose):
 				with open('{}/config/agenda.json'.format(famdir)) as g:
 					for l in g:
 						obj = json.loads(l)
-						if not self.force and obj['name'] in done: continue
+						if not self.force and obj['name'] in done: 
+							n += 1
+							continue
 						if not n % 100:
 							info('Finished {}/{} alignments({:0.2f}s since last message)'.format(n, todo, superpose.time.time() - t))
 							t = superpose.time.time()
@@ -58,7 +61,15 @@ class TMalign(superpose.Superpose):
 							qfn, sfn, 
 							'-m', tf.name
 						]
-						out = subprocess.check_output(cmd)
+						p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+						out, err = p.communicate()
+						if p.returncode:
+							#29: file not found, e.g. from being incompetently eliminated from the pipeline
+							#174: segfault, seems to be from having empty structures
+							if p.returncode in {29, 174}: 
+								n += 1
+								continue
+							else: raise Exception(err)
 						tf.flush()
 						tf.seek(0)
 
@@ -187,8 +198,8 @@ class TMalign(superpose.Superpose):
 		for pdb in indices:
 			if len(indices[pdb]) <= 2: continue
 			if bundle >= len(indices[pdb]): 
-				shutil.copy('{}/pdbs/{}.pdb'.format(famdir, pdb[:4]), 
-					'{}/cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdb, 1, len(indices[pdb])))
+				shutil.copy('{}/../pdbs/{}.pdb'.format(famdir, pdb[:4]), 
+					'{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdb, 1, len(indices[pdb])))
 			else:
 				for start in range(0, len(indices[pdb])-bundle+1):
 					end = start + bundle - 1
