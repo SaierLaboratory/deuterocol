@@ -14,10 +14,11 @@ class Alignment(object):
 		obj = json.loads(jstr)
 		self.jstr = jstr.strip()
 		data = extendomatic.unpack_obj(obj, dthreshold=dthreshold)
-		self.rmsd = data[0]
-		self.length = data[1]
-		self.mincov = data[2]
-		self.maxcov = data[3]
+		self.rmsd = data['rmsd']
+		self.length = data['length']
+		self.mincov = data['mincov']
+		self.maxcov = data['maxcov']
+		self.quality = obj['quality']
 
 		self.qpresent = obj['qpresent']
 		self.spresent = obj['spresent']
@@ -38,9 +39,14 @@ class Alignment(object):
 		''' minimizes distance to (RMSD=0.0, mincov=1.0) '''
 		return (self.rmsd)**2 + covweight*(1.0 - self.mincov)**2
 
+	def _score_quality(self):
+		''' maximizes quality '''
+		return self.quality
+
 	def get_score(self):
 		''' scores an alignment '''
-		return self._score_cartesian(covweight=8)
+		#return self._score_cartesian(covweight=8)
+		return self._score_quality()
 
 	def __lt__(self, other):
 		if self.get_score() < other.get_score(): return True
@@ -192,11 +198,14 @@ if __name__ == '__main__':
 	if not os.path.isdir(args.tmdatadir): 
 		raise IOError('Could not find tmdata directory')
 
+	#TODO: expose this to argparser
+	subpath = 'tmalignments'
+
 	if os.path.isdir(args.infile):
 		open(args.outfile, 'w')
 		for famvfam in os.listdir(args.infile):
-			for spfn in os.listdir('{}/{}/superpositions'.format(args.infile, famvfam)):
+			for spfn in os.listdir('{}/{}/{}'.format(args.infile, famvfam, subpath)):
 				if spfn.startswith('.'): continue
 				elif not spfn.lower().endswith('tsv'): continue
-				main('{}/{}/superpositions/{}'.format(args.infile, famvfam, spfn), args.outfile, stretch=args.s, append=True, tmdatadir=args.tmdatadir, dthreshold=args.d, mincov=args.min_cov)
+				main('{}/{}/{}/{}'.format(args.infile, famvfam, subpath, spfn), args.outfile, stretch=args.s, append=True, tmdatadir=args.tmdatadir, dthreshold=args.d, mincov=args.min_cov)
 	else: main(args.infile, args.outfile, stretch=args.s, append=False, tmdatadir=args.tmdatadir, dthreshold=args.d, mincov=args.min_cov)
