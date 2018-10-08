@@ -204,6 +204,7 @@ if __name__ == '__main__':
 	if os.path.isdir(args.infile):
 		open(args.outfile, 'w')
 		for famvfam in os.listdir(args.infile):
+			if '_vs_' not in famvfam: continue
 			for spfn in os.listdir('{}/{}/{}'.format(args.infile, famvfam, subpath)):
 				if spfn.startswith('.'): continue
 				elif not spfn.lower().endswith('tsv'): continue
