@@ -275,7 +275,7 @@ class TMData(object):
 
 #TODO: let's try using sqlite instead of scattered TSVs
 class Deuterocol1(object):
-	def __init__(self, tmdatadir, outdir, inclusive=True, invert=False, min_tms=None, max_tms=None):
+	def __init__(self, tmdatadir, outdir, inclusive=True, invert=False, min_tms=None, max_tms=None, invfactor=1):
 		self.tmdatadir = tmdatadir
 		self.outdir = outdir
 		self.tmdata = TMData()
@@ -283,6 +283,8 @@ class Deuterocol1(object):
 		self.invert = invert
 		self.min_tms = min_tms
 		self.max_tms = max_tms
+
+		self.invfactor = invfactor
 
 	def get_pdb_sequences(self):
 		subunitlist = self.tmdata.get_distinct_subunits()
@@ -635,7 +637,7 @@ class Deuterocol1(object):
 				with open('{}/tcdb/superfamily.json'.format(self.tmdatadir)) as f:
 					obj = json.loads(f.read())
 
-				tmcounts = self.get_rough_tmcounts()
+				tmcounts = self.get_rough_tmcounts() 
 
 				potential_families = []
 				for superfam in obj: 
@@ -699,6 +701,12 @@ class Deuterocol1(object):
 				final_subfamilies = sorted(final_subfamilies)
 				random.shuffle(final_subfamilies)
 
+
+				#expand target_chains if necessary
+				print(target_chains)
+				target_chains *= self.invfactor
+				print(target_chains)
+
 				#now finalize the tclist
 				tclist = []
 				for subfam in final_subfamilies:
@@ -751,10 +759,12 @@ if __name__ == '__main__':
 	parser.add_argument('-o', '--outdir', default='deuterocol1', help='Directory to send output to')
 	parser.add_argument('--invert', action='store_true', help='Obtain PDBs \033[1mNOT\033[0m in the list of families. Deuterocol 1 will try to assemble a dataset comparable in size to the families to be excluded')
 	parser.add_argument('--invert-inclusive', action='store_true', help='As --invert, but produces a Deuterocol1 directory including the excluded families')
+	parser.add_argument('--invert-inclusive-size', type=float, help='As --invert-inclusive, but multiplies the effective size of the excluded families')
 	parser.add_argument('--min-tms', default=None, type=int, help='Minimum number of TMSs for proteins in negative control (defaults to any)')
 	parser.add_argument('--max-tms', default=None, type=int, help='Maximum number of TMSs for proteins in negative control (defaults to any)')
 
 	args = parser.parse_args()
+	invfactor = 1
 
 	if args.invert and args.invert_inclusive: 
 		parser.print_usage()
@@ -765,9 +775,13 @@ if __name__ == '__main__':
 	elif args.invert_inclusive: 
 		invert = True
 		inclusive = True
+	elif args.invert_inclusive_size: 
+		invert = True
+		inclusive = True
+		invfactor = args.invert_inclusive_size
 	else: 
 		invert = False
 		inclusive = True
 
-	deut = Deuterocol1(tmdatadir=args.tmdatadir, outdir=args.outdir, invert=invert, inclusive=inclusive, min_tms=args.min_tms, max_tms=args.max_tms)
+	deut = Deuterocol1(tmdatadir=args.tmdatadir, outdir=args.outdir, invert=invert, inclusive=inclusive, min_tms=args.min_tms, max_tms=args.max_tms, invfactor=invfactor)
 	deut.run(*args.fams, force=args.f)
