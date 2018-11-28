@@ -2,12 +2,17 @@
 
 from __future__ import print_function, division
 import sys
+import os
 import json
 import argparse
 import shutil
 import tempfile
 
 import pymol
+
+def error(*stuff):
+	print('[ERROR]:', *stuff, file=sys.stderr)
+	sys.exit(1)
 
 def test_transform():
 
@@ -83,6 +88,7 @@ def extract_selectors(name, obj):
 	print('='*80)
 	print('{}:'.format(name))
 	print('\tRMSD: {:0.2f}'.format(obj['rmsd']))
+	print('\tTM-score: {:0.2f}'.format(obj['quality']))
 	if qa/qp < sa/sp:
 		print('\tMinimum coverage: {:0.2%} of query'.format(qa/qp))
 	else:
@@ -107,6 +113,7 @@ def main(name, obj, wd=None):
 
 	selectors = extract_selectors(name, obj)
 	pymol.cmd.hide('lines')
+	pymol.cmd.hide('nonbonded')
 	for k in sorted(selectors):
 		if k != 'matrix':
 			pymol.cmd.select(k, selectors[k])
@@ -130,20 +137,48 @@ def main(name, obj, wd=None):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
-	parser.add_argument('infile', nargs='+', help='TSVs to read data from')
+	parser.add_argument('d1dir', help='Deuterocol1 directory')
+	parser.add_argument('d2dir', help='Deuterocol2 directory')
 
 	parser.add_argument('name', help='name of alignment to load. Be warned that this selects only the first occurrence in all the files in the order given')
 
 	args = parser.parse_args()
 
+	query, qchain, qhel, vs, subject, schain, shel = args.name.split('_')
+	possfams = set()
+
+	with open(args.d1dir + '/pdblist.json') as f: pdbmap = json.loads(f.read())
+	for fam in pdbmap:
+		if (query + '_' + qchain) in pdbmap[fam]: possfams.add(fam)
+		if (subject + '_' + schain) in pdbmap[fam]: possfams.add(fam)
+
+	possfams = tuple(possfams)
+	subdirlist = []
+	for subdir in os.listdir(args.d2dir):
+		count = 0
+		for fam in possfams: 
+			if fam in subdir: count += 1
+		if count >= 2: subdirlist.append(subdir)
+	if not subdirlist: error('Could not find directories for comparisons between families {}'.format(possfams))
+
 	found = False
 	jstr = ''
-	for fn in args.infile:
+	n = 0
+
+	for subdir in subdirlist:
+		fn = args.d2dir + '/' + subdir + '/tmalignments/sp_all.tsv'
+		if not os.path.isfile(fn): error('Could not find TMalign records for', subdir)
+
+	#for fn in args.infile:
 		with open(fn) as f:
 			for l in f:
-				if l.startswith(args.name):
-					print(args.name, 'found in', fn)
-					jstr = l[l.find('\t')+1:]
+				n += 1
+				if not n % 10000: print('Checked', n, 'lines')
+				if l.startswith(args.name[:2]):
+					if l.startswith(args.name):
+						print('Found', args.name, 'in', fn)
+						jstr = l[l.find('\t')+1:]
+						found = True
 				if found: break
 		if found: break
 
@@ -152,7 +187,5 @@ if __name__ == '__main__':
 
 	obj = json.loads(jstr)
 	wd = tempfile.mkdtemp()
-	try:
-		main(args.name, obj, wd=wd)
-	finally:
-		shutil.rmtree(wd)
+	try: main(args.name, obj, wd=wd)
+	finally: shutil.rmtree(wd)

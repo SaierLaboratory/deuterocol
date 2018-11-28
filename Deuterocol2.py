@@ -61,12 +61,17 @@ class Paragraph(object):
 		if self.loopless: sourcedir = '{}/pdbs_loopless'.format(self.d1dir)
 		else: sourcedir = '{}/pdbs'.format(self.d1dir)
 
-		for fam in self.fams1:
-			for pdb in self.fams1[fam]:
-				shutil.copy('{}/{}.pdb'.format(sourcedir, pdb[:4]), '{}/pdbs/{}.pdb'.format(self.outdir, pdb[:4]))
-		for fam in self.fams2:
-			for pdb in self.fams2[fam]:
-				shutil.copy('{}/{}.pdb'.format(sourcedir, pdb[:4]), '{}/pdbs/{}.pdb'.format(self.outdir, pdb[:4]))
+		#FIXME: move this line to the appropriate location
+		if not os.path.isdir('{}/../pdbs'.format(self.outdir)): os.mkdir('{}/../pdbs'.format(self.outdir))
+
+		for fn in sorted(os.listdir('{}/pdbs'.format(self.d1dir))):
+			shutil.copy('{}/pdbs/{}'.format(self.d1dir, fn), '{}/../pdbs/{}'.format(self.outdir, fn))
+	#	for fam in self.fams1:
+	#		for pdb in self.fams1[fam]:
+	#			shutil.copy('{}/{}.pdb'.format(sourcedir, pdb[:4]), '{}/../pdbs/{}.pdb'.format(self.outdir, pdb[:4]))
+	#	for fam in self.fams2:
+	#		for pdb in self.fams2[fam]:
+	#			shutil.copy('{}/{}.pdb'.format(sourcedir, pdb[:4]), '{}/../pdbs/{}.pdb'.format(self.outdir, pdb[:4]))
 
 		commands = []
 		for fam1 in self.fams1:
@@ -210,7 +215,7 @@ class Deuterocol2(object):
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
-	parser.add_argument('-l', type=int, default=4, help='Bundle size')
+	parser.add_argument('-l', type=int, default=None, help='Bundle size')
 
 	parser.add_argument('--fams1', nargs='+', help='First list of families')
 	parser.add_argument('--fams2', nargs='+', help='Second list of families')
@@ -226,6 +231,12 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	if not (args.fams1 and args.fams2): 
+		parser.print_usage()
+		exit(1)
+
+	elif args.l is None:
+		#this is another thing that should be moved to deuterocol_common
+		Deuterocol1.error('No bundle length specified')
 		parser.print_usage()
 		exit(1)
 

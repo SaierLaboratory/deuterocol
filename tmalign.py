@@ -31,7 +31,11 @@ class TMalign(superpose.Superpose):
 				for l in f:
 					if not l.strip(): continue
 					elif l.startswith('#'): continue
-					else: done.append(l.split('\t')[0])
+					else: 
+						try: 
+							json.loads(l.split('\t')[1])
+							done.append(l.split('\t')[0])
+						except ValueError: break
 		if done: info('Skipping {} alignments (already done)'.format(len(done)))
 
 		todo = -len(done)
@@ -222,7 +226,7 @@ class TMalign(superpose.Superpose):
 						stdout=subprocess.PIPE,
 						stderr=subprocess.PIPE)
 					out, err = p.communicate(input=cmd)
-					if VERBOSITY: print(out)
+					if VERBOSITY and out.strip(): print(out)
 
 
 	def run(self):
