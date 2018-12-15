@@ -237,6 +237,7 @@ class Subunit(object):
 				start = 0
 				end = spanstr[spanstr[1:].find('-'):]
 			else:
+				print(s)
 				start, end = spanstr.split('-')
 			spans.append((int(start), int(end)))
 		return Subunit(pdbid, letter, spans)
