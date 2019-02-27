@@ -7,8 +7,11 @@ import json
 import argparse
 import shutil
 import tempfile
+import subprocess
 
 import pymol
+
+import tmalignparser
 
 def error(*stuff):
 	print('[ERROR]:', *stuff, file=sys.stderr)
@@ -91,15 +94,29 @@ def extract_selectors(name, obj):
 	print('\tTM-score: {:0.2f}'.format(obj['quality']))
 	if qa/qp < sa/sp:
 		print('\tMinimum coverage: {:0.2%} of query'.format(qa/qp))
+		print('\tMaximum coverage: {:0.2%} of subject'.format(sa/sp))
 	else:
 		print('\tMinimum coverage: {:0.2%} of subject'.format(sa/sp))
+		print('\tMaximum coverage: {:0.2%} of query'.format(qa/qp))
 	seldict['qpresent'] = seldict['qpresent'][:-1]
 	seldict['spresent'] = seldict['spresent'][:-1]
 	seldict['qaligned'] = seldict['qaligned'][:-1]
 	seldict['saligned'] = seldict['saligned'][:-1]
 	return seldict
 
-def main(name, obj, wd=None):
+def run_tmap(obj, d2dir):
+	qfn = '{}/cut_pdbs/{}'.format(d2dir, os.path.basename(obj['queryfn']))
+	sfn = '{}/cut_pdbs/{}'.format(d2dir, os.path.basename(obj['subjectfn']))
+
+	tf = tempfile.NamedTemporaryFile()
+	out = subprocess.check_output(['TMalign', qfn, sfn])
+	tf.write(out)
+	tf.flush()
+
+	selectors = tmalignparser.main([tf.name])
+	return selectors
+
+def main(name, obj, d2dir, wd=None):
 	sys.argv = sys.argv[:1]
 	pymol.finish_launching()
 
@@ -112,13 +129,18 @@ def main(name, obj, wd=None):
 	pymol.cmd.fetch(obj['subject'])
 
 	selectors = extract_selectors(name, obj)
+
+	qaligned, saligned = run_tmap(obj, d2dir)
+	selectors['qaligned'] = qaligned
+	selectors['saligned'] = saligned
+
 	pymol.cmd.hide('lines')
-	pymol.cmd.hide('nonbonded')
 	for k in sorted(selectors):
 		if k != 'matrix':
 			pymol.cmd.select(k, selectors[k])
 			if k.endswith('masked'):
 				pymol.cmd.show('cartoon', k)
+
 
 	truematrix = []
 	for row in obj['matrix']: truematrix += row
@@ -187,5 +209,5 @@ if __name__ == '__main__':
 
 	obj = json.loads(jstr)
 	wd = tempfile.mkdtemp()
-	try: main(args.name, obj, wd=wd)
+	try: main(args.name, obj, wd=wd, d2dir=args.d2dir)
 	finally: shutil.rmtree(wd)
