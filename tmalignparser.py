@@ -148,8 +148,10 @@ def get_aligned_contig_sequences(alignmentlines, minlength=4):
 			qcontigs.append(qresn)
 			tcontigs.append(tresn)
 		elif lastmidline in permitted and midline in permitted:
-			qcontigs[-1] += qresn
-			tcontigs[-1] += tresn
+			try: qcontigs[-1] += qresn
+			except IndexError: qcontigs.append(qresn)
+			try: tcontigs[-1] += tresn
+			except IndexError: tcontigs.append(tresn)
 		elif lastmidline in ' ' and midline in permitted:
 			qcontigs.append(qresn)
 			tcontigs.append(tresn)
