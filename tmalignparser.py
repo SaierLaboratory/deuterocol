@@ -10,8 +10,8 @@ try: from Bio.PDB import protein_letters_3to1 as CODE
 except AttributeError: from Bio.PDB import to_one_letter_codes as CODE
 
 class NumberedSequence(object):
-	def __init__(self, iterable):
-		self.iterable = iterable
+	def __init__(self, iterable=None):
+		self.iterable = [] if iterable is None else iterable
 		self.validate()
 
 	def validate(self):
@@ -41,6 +41,12 @@ class NumberedSequence(object):
 			else: rawcontigs.append([pair])
 			lasti = pair[1]
 		return [NumberedSequence(contig) for contig in rawcontigs]
+
+	def get_ranges(self):
+		contigs = self.get_contigs()
+		spans = []
+		for contig in contigs: spans.append(list(contig.get_range()))
+		return spans
 
 	def __getitem__(self, index):
 		if type(index) is int:
@@ -81,7 +87,7 @@ class NumberedSequence(object):
 		if bank: return NumberedSequence(bank[0])
 		else: return None
 
-	def gapless_align_string(self, string):
+	def gapless_align_string(self, string, start=None):
 		if len(string) > len(self): raise NotImplementedError
 		#elif len(string) == len(self):
 		#	idents = 0
@@ -93,6 +99,7 @@ class NumberedSequence(object):
 			maxident = 0
 			#print(self, string)
 			for i in range(len(self) - len(string) + 1):
+				if start is not None and self.iterable[i][1] < start: continue
 				idents[i] = 0
 				for c1, c2 in zip(self.iterable[i:i+len(string)], string):
 					if c1[0] == c2: idents[i] += 1
@@ -123,6 +130,29 @@ class NumberedSequence(object):
 			high = pair[1]
 		return '<NumberedSequence range=({}, {}) seq="{}">'.format(low, high, seq)
 	def __len__(self): return len(self.iterable)
+
+	def __add__(self, other): 
+		sdone = set()
+		for resn, resi in self.iterable: 
+			if resi in sdone: raise ValueError('Internal id collision in left addend')
+
+		odone = set()
+		for resn, resi in other.iterable: 
+			if resi in odone: raise ValueError('Internal id collision in right addend')
+
+		for resi in sorted(sdone):
+			if resi in odone:
+				if self[resi] != other[resi]: raise ValueError('id collision between left and right at {}'.format(resi))
+
+		siter = self.iterable[:]
+		oiter = other.iterable[:]
+		newiter = []
+		while siter or oiter:
+			if not siter: newiter.append(oiter.pop(0))
+			elif  not oiter: newiter.append(siter.pop(0))
+			elif siter[0][1] <= oiter[0][1]: newiter.append(siter.pop(0))
+			else: newiter.append(oiter.pop(0))
+		return NumberedSequence(newiter)
 
 def extract_atom_sequence(f, chain):
 	sequence = []
@@ -209,10 +239,6 @@ def main(rawargs):
 	rangestr = rangestr[:-1]
 	selectors.append('{} and c. {} and i. {}'.format(pdbaccs[1], chains[1], rangestr))
 	return selectors
-	#for i in range(0, len(alignmentlines[0]), 80):
-	#	print('q', alignmentlines[0][i:i+80])
-	#	print('m', alignmentlines[1][i:i+80])
-	#	print('t', alignmentlines[2][i:i+80])
 
 if __name__ == '__main__':
 	main(sys.argv[1:])
