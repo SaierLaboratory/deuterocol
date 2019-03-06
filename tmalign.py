@@ -7,6 +7,8 @@ import tempfile
 import superpose
 import shutil
 
+import tmalignparser
+
 
 VERBOSITY = 1
 def info(*things):
@@ -16,6 +18,28 @@ def warn(*things):
 def error(*things):
 	print('[ERROR]:', *things, file=sys.stderr)
 	exit(1)
+
+def _intersection_size(spans1, spans2):
+	n = 0
+	lastn = None
+	for span1 in spans1:
+		for span2 in spans2:
+			if span1[0] <= span2[0] <= span2[1] <= span1[1]: 
+				n += span2[1] - span2[0] + 1
+			elif span2[0] <= span1[0] <= span1[1] <= span2[1]: 
+				n += span1[1] - span1[0] + 1
+			elif (span2[0] == span1[0]) and (span1[1] == span2[1]): 
+				n += span1[1] - span1[0] + 1
+			elif span1[0] <= span2[0] <= span1[1] or span2[0] <= span1[1] <= span2[1]: 
+				n += span1[1] - span2[0] + 1
+			elif span2[0] <= span1[0] <= span2[1] or span1[0] <= span2[1] <= span1[1]:
+				n += span2[1] - span1[0] + 1
+			else: 
+				n += 0
+			if lastn is not None and n < lastn: 
+				print(span1, span2)
+		lastn = n
+	return n
 
 class TMalign(superpose.Superpose):
 	def __init__(self, d2dir='deuterocol2', force=False, skip_cut=True):
@@ -51,6 +75,7 @@ class TMalign(superpose.Superpose):
 			with open('{}/tmalignments/sp_all.tsv'.format(famdir), 'a') as f:
 				with open('{}/config/agenda.json'.format(famdir)) as g:
 					for l in g:
+						alnstart = time.time()
 						obj = json.loads(l)
 						if not self.force and obj['name'] in done: 
 							n += 1
@@ -66,6 +91,8 @@ class TMalign(superpose.Superpose):
 							qfn, sfn, 
 							'-m', tf.name
 						]
+
+						#this is where TMalign is run
 						p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 						out, err = p.communicate()
 						if p.returncode:
@@ -97,6 +124,8 @@ class TMalign(superpose.Superpose):
 						tmscores = []
 						alignment = False
 						aligned = []
+
+						#this is the where TMalign parsing starts
 						for tml in out.split('\n'):
 							if alignment is False:
 								if tml.startswith('Aligned length'):
@@ -107,11 +136,87 @@ class TMalign(superpose.Superpose):
 								elif tml.startswith('(":" denotes'): alignment = True
 							else:
 								if tml.strip():
-									aligned.append(tml.strip())
+									aligned.append(tml.replace('\n', ''))
 						sp.quality = max(tmscores)
 						qseq, dseq, sseq = aligned
+
+						covstuff = True
+						if covstuff:
+							covstart = time.time()
+
+							#if a contig couldn't be found but the fragment was shorter than this, skip
+							minl_relevant = 4
+
+							qatomseq = tmalignparser.extract_atom_sequence(open(qfn), obj['qchain'])
+							satomseq = tmalignparser.extract_atom_sequence(open(sfn), obj['schain'])
+
+							permitted = '.:'
+							lastd = '#'
+							qfrags = []
+							sfrags = []
+							for q, d, s in zip(qseq, dseq, sseq):
+								if d in permitted: 
+									if lastd in permitted:
+										qfrags[-1] += q
+										sfrags[-1] += s
+									else:
+										qfrags.append(q)
+										sfrags.append(s)
+								lastd = d
+
+							qistart = None
+							qaln_combined = tmalignparser.NumberedSequence()
+							for qfrag in qfrags:
+								qcontig = qatomseq.gapless_align_string(qfrag, start=qistart)
+								if qcontig is None: 
+									if len(sfrag) < minl_relevant: continue
+									#print(qfrag, qatomseq)
+									continue
+
+								qaln_combined = qaln_combined + qcontig
+								qistart = qcontig.get_range()[-1] + 1
+
+							sistart = None
+							saln_combined = tmalignparser.NumberedSequence()
+							for sfrag in sfrags:
+								scontig = satomseq.gapless_align_string(sfrag, start=sistart)
+								#print(sfrag, sistart, scontig, satomseq)
+								if scontig is None: 
+									if len(sfrag) < minl_relevant: continue
+									#print(sfn)
+									#print(satomseq.iterable)
+									#print(out)
+									#exit(1)
+									continue
+
+								saln_combined = saln_combined + scontig
+								#sistart = scontig.get_range()[-1] + 1
+								sistart = scontig.get_range()[-1] - 2
+
+							n_qaligned = _intersection_size(qaln_combined.get_ranges(), obj['qindices'])
+							n_saligned = _intersection_size(saln_combined.get_ranges(), obj['sindices'])
+
+							sp.qlen = len(qatomseq)
+							sp.slen = len(satomseq)
+
+							sp.qtmlen = obj['qlen']
+							sp.stmlen = obj['slen']
+
+							sp.qtmcov = n_qaligned / sp.qtmlen
+							sp.stmcov = n_saligned / sp.stmlen
+							sp.tmcov = max(sp.qtmcov, sp.stmcov)
+
+							sp.qfullcov = sp.length / sp.qlen
+							sp.sfullcov = sp.length / sp.slen
+							sp.fullcov = max(sp.qfullcov, sp.sfullcov)
+
+
+							covtime = time.time() - covstart
 						dseq += ' ' * max(0, len(qseq)-len(dseq))
 						qaligned, saligned, distances = [], [], []
+						aligned = 0
+
+
 						lastqr, lastsr = '', ''
 						lastdist = -1
 						qi, si = sp.qpresent[0][0], sp.spresent[0][0]
@@ -127,12 +232,14 @@ class TMalign(superpose.Superpose):
 									if scur == '-': saligned.append([None, 1])
 									else: saligned.append([si, 1])
 									distances.append(5.0)
+									aligned += 1
 								elif dist == ':':
 									if qcur == '-': qaligned.append([None, 1])
 									else: qaligned.append([qi, 1])
 									if scur == '-': saligned.append([None, 1])
 									else: saligned.append([si, 1])
 									distances.append(0.0)
+									aligned += 1
 							elif dist == ' ': 
 								if qaligned[-1][0] is None: qaligned[-1][1] += 1
 								else: qaligned.append([None, 1])
@@ -145,12 +252,14 @@ class TMalign(superpose.Superpose):
 								if saligned[-1][0] is None: saligned.append([si, 1])
 								else: saligned[-1][1] += 1
 								distances.append(5.0)
+								aligned += 1
 							elif dist == ':': 
 								if qaligned[-1][0] is None: qaligned.append([qi, 1])
 								else: qaligned[-1][1] += 1
 								if saligned[-1][0] is None: saligned.append([si, 1])
 								else: saligned[-1][1] += 1
 								distances.append(0.)
+								aligned += 1
 							#if not qaligned and qcur == '-': qaligned.append([None, 1])
 							#elif not qaligned and qcur != '-': qaligned.append([qi, 1])
 							#elif qcur == '-' and lastqr == '-': qaligned[-1][1] += 1
@@ -172,6 +281,8 @@ class TMalign(superpose.Superpose):
 
 							if qcur != '-': qi += 1
 							if scur != '-': si += 1
+							if qcur == '-': qi += 1
+							if scur == '-': si += 1
 							lastqr = qcur
 							lastsr = scur
 							lastdist = dist
@@ -179,12 +290,15 @@ class TMalign(superpose.Superpose):
 						sp.qaligned = qaligned
 						sp.saligned = saligned
 						sp.distances = distances
-							
+						sp.aligned = aligned
+
 						query, qchain, qhel, vs, subject, schain, shel = obj['name'].split('_')
 						sp.qhel = [int(x) for x in qhel[1:].split('-')]
 						sp.shel = [int(x) for x in shel[1:].split('-')]
 						f.write('{}\t{}\n'.format(obj['name'], sp.dump_json()))
 						n += 1
+						alntime = time.time() - alnstart
+						#print(covtime, alntime)
 		info('Finished alignments for {}'.format(famdir))
 
 
@@ -200,33 +314,48 @@ class TMalign(superpose.Superpose):
 			obj = json.loads(f.readline())
 			bundle = obj['bundle']
 
-		for pdb in indices:
-			if len(indices[pdb]) <= 2: continue
-			if bundle >= len(indices[pdb]): 
-				shutil.copy('{}/../pdbs/{}.pdb'.format(famdir, pdb[:4]), 
-					'{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdb, 1, len(indices[pdb])))
-			else:
-				for start in range(0, len(indices[pdb])-bundle+1):
-					end = start + bundle - 1
-					infile = '{}/../pdbs/{}.pdb'.format(famdir, pdb[:4])
-					outfile = '{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdb, start+1, end+1)
-					if not os.path.isfile(infile): continue
-					if os.path.isfile(outfile) and os.path.getsize(outfile):
-						with open(outfile) as f:
-							for l in f: pass
-						if l.startswith('END'): continue
-					cmd = 'lvresidue {}-{}\nlvchain {}\nwrite PDB'.format(
-						indices[pdb][start][0],
-						indices[pdb][end][1],
-						pdb[-1])
-					p = subprocess.Popen(['pdbcur', 
-						'xyzin', infile,
-						'xyzout', outfile],
-						stdin=subprocess.PIPE,
-						stdout=subprocess.PIPE,
-						stderr=subprocess.PIPE)
-					out, err = p.communicate(input=cmd)
-					if VERBOSITY and out.strip(): print(out)
+		cutme = set()
+		with open('{}/config/align_me.json'.format(famdir)) as f:
+			for l in f:
+				obj = json.loads(l)
+				for fam in obj:
+					for pdbid in obj[fam]:
+						cutme.add(pdbid[:4])
+
+		chains = {}
+		for pdbc in indices:
+			try: chains[pdbc[:4]].append(pdbc)
+			except KeyError: chains[pdbc[:4]] = [pdbc]
+		
+		for pdb in sorted(cutme):
+			for pdbc in chains[pdb]:
+				if len(indices[pdbc]) <= 2: continue
+				#if bundle >= len(indices[pdbc]): 
+				if False:
+					shutil.copy('{}/../pdbs/{}.pdb'.format(famdir, pdb), 
+						'{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdbc, 1, len(indices[pdbc])))
+				else:
+					for start in range(0, len(indices[pdbc])-bundle+1):
+						end = start + bundle - 1
+						infile = '{}/../pdbs/{}.pdb'.format(famdir, pdb)
+						outfile = '{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdbc, start+1, end+1)
+						if not os.path.isfile(infile): continue
+						if os.path.isfile(outfile) and os.path.getsize(outfile):
+							with open(outfile) as f:
+								for l in f: pass
+							if l.startswith('END'): continue
+						cmd = 'lvresidue {}-{}\nlvchain {}\nwrite PDB'.format(
+							indices[pdbc][start][0],
+							indices[pdbc][end][1],
+							pdbc[-1])
+						p = subprocess.Popen(['pdbcur', 
+							'xyzin', infile,
+							'xyzout', outfile],
+							stdin=subprocess.PIPE,
+							stdout=subprocess.PIPE,
+							stderr=subprocess.PIPE)
+						out, err = p.communicate(input=cmd)
+						if VERBOSITY and out.strip(): print(out)
 
 
 	def run(self):

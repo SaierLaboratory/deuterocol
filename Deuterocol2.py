@@ -64,14 +64,17 @@ class Paragraph(object):
 		#FIXME: move this line to the appropriate location
 		if not os.path.isdir('{}/../pdbs'.format(self.outdir)): os.mkdir('{}/../pdbs'.format(self.outdir))
 
-		for fn in sorted(os.listdir('{}/pdbs'.format(self.d1dir))):
-			shutil.copy('{}/pdbs/{}'.format(self.d1dir, fn), '{}/../pdbs/{}'.format(self.outdir, fn))
-	#	for fam in self.fams1:
-	#		for pdb in self.fams1[fam]:
-	#			shutil.copy('{}/{}.pdb'.format(sourcedir, pdb[:4]), '{}/../pdbs/{}.pdb'.format(self.outdir, pdb[:4]))
-	#	for fam in self.fams2:
-	#		for pdb in self.fams2[fam]:
-	#			shutil.copy('{}/{}.pdb'.format(sourcedir, pdb[:4]), '{}/../pdbs/{}.pdb'.format(self.outdir, pdb[:4]))
+		copyme = set()
+		with open('{}/config/align_me.json'.format(self.outdir)) as f:
+			for l in f:
+				obj = json.loads(l)
+				for fam in obj:
+					for pdbid in obj[fam]:
+						copyme.add(pdbid[:4])
+		#for fn in sorted(os.listdir('{}/pdbs'.format(self.d1dir))):
+		for fn in sorted(copyme):
+			#shutil.copy('{}/pdbs/{}'.format(self.d1dir, fn), '{}/../pdbs/{}'.format(self.outdir, fn))
+			shutil.copy('{}/pdbs/{}.pdb'.format(self.d1dir, fn), '{}/../pdbs/{}.pdb'.format(self.outdir, fn))
 
 		commands = []
 		for fam1 in self.fams1:
@@ -98,6 +101,12 @@ class Paragraph(object):
 								sstart = indices[pdb2][bundle2].start
 								if bundle2 + self.bundle - 1 >= len(indices[pdb2]): send = indices[pdb2][-1].end
 								else: send = indices[pdb2][bundle2 + self.bundle - 1].end
+
+								qindices = indices[pdb1][bundle1:bundle1+self.bundle].to_rawlist()
+								qlen = indices[pdb1][bundle1:bundle1+self.bundle].residue_count()
+								sindices = indices[pdb2][bundle2:bundle2+self.bundle].to_rawlist()
+								slen = indices[pdb2][bundle2:bundle2+self.bundle].residue_count()
+
 								commands.append({'name':'{}_h{}-{}_vs_{}_h{}-{}'.format( \
 										pdb1, \
 										bundle1+1, min(len(indices[pdb1]), bundle1+self.bundle-1+1), \
@@ -110,6 +119,10 @@ class Paragraph(object):
 									#'shelices': list(range(bundle2+1, bundle2+1+self.bundle)), \
 									'qhelices': [bundle1+1, min(len(indices[pdb1]), bundle1+self.bundle)], \
 									'shelices': [bundle2+1, min(len(indices[pdb2]), bundle2+self.bundle)], \
+									'qindices': qindices, \
+									'sindices': sindices, \
+									'qlen': qlen, \
+									'slen': slen, \
 									#'qfam': fam1, \
 									#'sfam': fam2, \
 									'bundle': self.bundle, \

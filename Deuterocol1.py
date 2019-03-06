@@ -102,7 +102,18 @@ class Spans(object):
 		for i in self: s += '{}-{}, '.format(i.start, i.end)
 		s = s[:-2] + '])'
 		return s
-	def __getitem__(self, i): return self.spans[i]
+	def __getitem__(self, i): 
+		if type(i) is int: return self.spans[i]
+		else: return Spans(self.spans[i])
+
+	def to_rawlist(self):
+		out = []
+		for span in self.spans:
+			out.append([span.start, span.end])
+		return out
+
+	def residue_count(self): return sum([span.end - span.start + 1 for span in self])
+			
 	def __setitem__(self, i, x): self.spans[i] = x
 
 	def extend(self, other, selfish=False):

@@ -21,10 +21,28 @@ class Alignment(object):
 		self.shel = []
 		self.qaligned = []
 		self.saligned = []
+		#TODO: turn most of this into a dict
+		self.aligned = -1
+
+		self.qfullcov = -1
+		self.sfullcov = -1
+		self.fullcov = -1
+
+		self.qtmcov = -1
+		self.stmcov = -1
+		self.tmcov = -1
+
+		self.qlen = -1
+		self.slen = -1
+
+		self.qtmlen = -1
+		self.stmlen = -1
+
 		self.distances = []
 		self.qpresent = []
 		self.spresent = []
 		self.matrix = []
+
 		self.quality = -1
 		self.rmsd = -1
 		self.length = -1
@@ -37,7 +55,12 @@ class Alignment(object):
 			'qpresent':self.qpresent, 'spresent':self.spresent, \
 			'distances':self.distances, \
 			'matrix':self.matrix, \
-			'quality':self.quality, 'rmsd':self.rmsd, 'length':self.length
+			'quality':self.quality, 'rmsd':self.rmsd, 'length':self.length, \
+			'aligned':self.aligned, \
+			'qfullcov':self.qfullcov, 'sfullcov':self.sfullcov, 'fullcov':self.fullcov, \
+			'qtmcov':self.qtmcov, 'stmcov':self.stmcov, 'tmcov':self.tmcov, \
+			'qtmlen':self.qtmlen, 'stmlen':self.stmlen, \
+			'qlen':self.qlen, 'slen':self.slen, \
 		}
 		return json.dumps(obj)
 
@@ -57,6 +80,10 @@ class Alignment(object):
 		selfobj.quality = obj['quality']
 		selfobj.rmsd = obj['rmsd']
 		selfobj.length = obj['length']
+		selfobj.qlen = obj['qlen']
+		selfobj.slen = obj['slen']
+		selfobj.qcov = obj['qcov']
+		selfobj.scov = obj['scov']
 		return obj
 
 	@staticmethod
