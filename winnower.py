@@ -6,7 +6,7 @@ import argparse, os, sys, json
 import extendomatic
 
 class Alignment(object):
-	def __init__(self, name, jstr, tmdatadir=None, dthreshold=4):
+	def __init__(self, name, jstr, tmdatadir=None, dthreshold=4, scoring_function='mincov'):
 		self.name = name
 		self.query, self.qchain, self.qhel, vs, self.subject, self.schain, self.shel = name.split('_')
 		self.qhels = get_hel_list(self.qhel)
@@ -22,6 +22,8 @@ class Alignment(object):
 
 		self.qpresent = obj['qpresent']
 		self.spresent = obj['spresent']
+
+		self.scoring_function = scoring_function
 
 	#def __lt__(self, other):
 	#	''' maximizes coverage '''
@@ -41,12 +43,16 @@ class Alignment(object):
 
 	def _score_quality(self):
 		''' maximizes quality '''
-		return self.quality
+		return -self.quality
 
 	def get_score(self):
 		''' scores an alignment '''
 		#return self._score_cartesian(covweight=8)
-		return self._score_quality()
+		#return self._score_quality()
+		if self.scoring_function.startswith('mincov'): return self._score_mincov()
+		elif self.scoring_function.startswith('cartes'): return self._score_cartesian(covweight=8)
+		elif self.scoring_function.startswith('qual'): return self._score_quality()
+		else: raise ValueError('Invalid scoring function {}'.format(self.scoring_function))
 
 	def __lt__(self, other):
 		if self.get_score() < other.get_score(): return True
@@ -86,7 +92,7 @@ def count_covered_tmss(spans, interval, threshold=10):
 		if n > threshold: tmss += 1
 	return tmss
 
-def main(infile, outfile='/dev/stdout', stretch=0, append=False, tmdatadir='tmdata', dthreshold=4, mincov=0.):
+def main(infile, outfile='/dev/stdout', stretch=0, append=False, tmdatadir='tmdata', dthreshold=4, mincov=0., scoring_function='mincov'):
 	print(infile, outfile)
 	if not tmdatadir: tmdatadir = None
 	currstrucs = (None, None)
@@ -107,7 +113,7 @@ def main(infile, outfile='/dev/stdout', stretch=0, append=False, tmdatadir='tmda
 			except ValueError:
 				print(l)
 				continue
-			try: current = Alignment(name, jstr, tmdatadir=tmdatadir, dthreshold=dthreshold)
+			try: current = Alignment(name, jstr, tmdatadir=tmdatadir, dthreshold=dthreshold, scoring_function=scoring_function)
 			except ValueError: continue
 			if current.rmsd == -1: continue
 			if current.mincov < mincov: continue
@@ -184,16 +190,25 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument('infile', help='a single superposition TSV or a deuterocol2 root directory')
-	parser.add_argument('-d', default=4, type=float, help='distance threshold (default:4)')
-	parser.add_argument('--min-cov', default=0., type=float, help='minimum coverage')
-	parser.add_argument('-s', default=0, type=int, help='how many extra alignments to keep for each pair of structures (default:0)')
-	parser.add_argument('outfile', nargs='?', default='/dev/stdout')
-	parser.add_argument('--tmdatadir', nargs='?', default='tmdata')
+	parser.add_argument('-d', default=6, type=float, help='distance threshold for coverage calculations (float, default:6)')
+	parser.add_argument('--min-cov', default=0., type=float, help='minimum coverage (float [0..1], default:0.)')
+	parser.add_argument('-s', default=0, type=int, help='how many extra alignments to keep for each pair of structures (int, default:0)')
+	parser.add_argument('outfile', nargs='?', default='/dev/stdout', help='where to write the surviving alignments')
+	parser.add_argument('--tmdatadir', nargs='?', default='tmdata', help='where the TMdata assignments are stored')
+	parser.add_argument('--scoring-function', default=None, help='scoring function to use (options: qual, mincov, cartes)')
 
 	args = parser.parse_args()
 	if args.infile == args.outfile: 
 		parser.print_usage()
 		exit(1)
+
+	if args.scoring_function is None:
+		parser.print_usage()
+		exit(1)
+	elif args.scoring_function not in ['mincov', 'cartes', 'qual']: 
+		parser.print_usage()
+		exit(1)
+		
 
 	if not os.path.isdir(args.tmdatadir): 
 		raise IOError('Could not find tmdata directory')
@@ -205,8 +220,11 @@ if __name__ == '__main__':
 		open(args.outfile, 'w')
 		for famvfam in os.listdir(args.infile):
 			if '_vs_' not in famvfam: continue
+			if not os.path.isdir('{}/{}/{}'.format(args.infile, famvfam, subpath)): 
+				print('[WARNING]: Could not find TMalign results in directory {}/{}/{}'.format(args.infile, famvfam, subpath), file=sys.stderr)
+				continue
 			for spfn in os.listdir('{}/{}/{}'.format(args.infile, famvfam, subpath)):
 				if spfn.startswith('.'): continue
 				elif not spfn.lower().endswith('tsv'): continue
-				main('{}/{}/{}/{}'.format(args.infile, famvfam, subpath, spfn), args.outfile, stretch=args.s, append=True, tmdatadir=args.tmdatadir, dthreshold=args.d, mincov=args.min_cov)
-	else: main(args.infile, args.outfile, stretch=args.s, append=False, tmdatadir=args.tmdatadir, dthreshold=args.d, mincov=args.min_cov)
+				main('{}/{}/{}/{}'.format(args.infile, famvfam, subpath, spfn), args.outfile, stretch=args.s, append=True, tmdatadir=args.tmdatadir, dthreshold=args.d, mincov=args.min_cov, scoring_function=args.scoring_function)
+	else: main(args.infile, args.outfile, stretch=args.s, append=False, tmdatadir=args.tmdatadir, dthreshold=args.d, mincov=args.min_cov, scoring_function=args.scoring_function)
