@@ -169,7 +169,7 @@ class TMalign(superpose.Superpose):
 							for qfrag in qfrags:
 								qcontig = qatomseq.gapless_align_string(qfrag, start=qistart)
 								if qcontig is None: 
-									if len(sfrag) < minl_relevant: continue
+									if len(qfrag) < minl_relevant: continue
 									#print(qfrag, qatomseq)
 									continue
 
