@@ -2,6 +2,11 @@
 from __future__ import print_function
 import json, argparse, sys
 
+def pretty(obj, k):
+	if 'cov' in k: return '{:0.2%}'.format(obj[k])
+	elif 'present' in k: return '{}-{}'.format(obj[k][0][0], obj[k][0][1])
+	else: return str(obj[k])
+
 def main(infile, outfile):
 	fout = open(outfile, 'w')
 	with open(infile) as fin:
@@ -27,7 +32,7 @@ def main(infile, outfile):
 			s += '{}\t{}\t{}\t'.format(subject, schain, shel)
 			for k in whitelist:
 				if k in blacklist: continue
-				try: s += str(obj[k]) + '\t'
+				try: s += pretty(obj, k) + '\t'
 				except KeyError: s += '\t'
 			fout.write(s.strip() + '\n')
 			

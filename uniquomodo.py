@@ -113,7 +113,7 @@ def run_tmap(obj, d2dir):
 	tf.write(out)
 	tf.flush()
 
-	selectors = tmalignparser.main([tf.name])
+	selectors = tmalignparser.main([tf.name, qfn, sfn])
 	return selectors
 
 def main(name, obj, d2dir, wd=None):

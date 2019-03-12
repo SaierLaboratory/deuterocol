@@ -197,16 +197,33 @@ def get_aligned_contig_sequences(alignmentlines, minlength=4):
 def main(rawargs):
 	parser = argparse.ArgumentParser()
 	parser.add_argument('infile')
+	parser.add_argument('queryfn', default=None, nargs='?')
+	parser.add_argument('subjectfn', default=None, nargs='?')
 	args = parser.parse_args(rawargs)
 
-	fns = []
+	fns = [None, None]
+	if args.queryfn: fns[0] = args.queryfn
+	if args.subjectfn: fns[1] = args.subjectfn
+
 	alignmentlines = []
 	recording = False
+	fn_id = 0
 	with open(args.infile) as f:
 		for l in f:
 			if not l.strip(): continue
 			elif l.startswith('Name of'):
-				fns.append(re.split('\s*:\s*', l.strip())[1])
+				fn = re.split('\s*:\s*', l.strip())[1]
+
+				if not (args.queryfn or args.subjectfn): fns[fn_id] = fn
+				elif args.queryfn and not args.subjectfn: 
+					if fn_id == 1: fns[1] = fn
+				#won't happen, but just in case
+				elif args.subjectfn and not args.queryfn:
+					if fn_id == 0: fns[0] = fn
+				elif args.queryfn and args.subjectfn: pass
+
+				fn_id += 1
+
 			elif l.startswith('(":" denotes'): recording = True
 			elif recording: alignmentlines.append(l.replace('\n', ''))
 
