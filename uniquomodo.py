@@ -47,7 +47,7 @@ def to_pymol_ranges(spans):
 	for span in spans:
 		if span[0] == span[1]:  out += '{}+'.format(span[0])
 		else: out += '{}-{}+'.format(span[0], span[-1])
-	return out[:-2]
+	return out
 		
 def compress_list(l):
 	lasti = None
@@ -64,6 +64,7 @@ def compress_list(l):
 def extract_selectors(name, obj):
 	query, qchain, qtms, vs, subject, schain, stms = name.split('_')
 	seldict = {}
+
 
 	seldict['qchain'] = '{} and c. {}'.format(query, qchain)
 	seldict['schain'] = '{} and c. {}'.format(subject, schain)
@@ -152,8 +153,10 @@ def main(name, obj, d2dir, wd=None):
 		exit(1)
 
 	pymol.cmd.set('fetch_path', wd)
-	pymol.cmd.fetch(obj['query'])
-	pymol.cmd.fetch(obj['subject'])
+	#pymol.cmd.fetch(obj['query'])
+	pymol.cmd.load('{}/pdbs/{}.pdb'.format(d2dir, obj['query']))
+	#pymol.cmd.fetch(obj['subject'])
+	pymol.cmd.load('{}/pdbs/{}.pdb'.format(d2dir, obj['subject']))
 
 	selectors = extract_selectors(name, obj)
 
@@ -162,11 +165,16 @@ def main(name, obj, d2dir, wd=None):
 	selectors['saligned'] = saligned
 
 	pymol.cmd.hide('lines')
+	print()
+	print('Selectors:')
+	print('----------')
 	for k in sorted(selectors):
 		if k != 'matrix':
 			pymol.cmd.select(k, selectors[k])
-			if k.endswith('masked'):
+			
+			if k.endswith('masked'): 
 				pymol.cmd.show('cartoon', k)
+			print(k + ':', selectors[k])
 
 
 	truematrix = []
@@ -174,8 +182,9 @@ def main(name, obj, d2dir, wd=None):
 	truematrix += [0., 0., 0., 1.]
 	pymol.cmd.transform_selection(obj['query'], truematrix)
 	pymol.cmd.rotate('x', 90)
-	pymol.cmd.center('*masked')
-	pymol.cmd.zoom('*masked')
+	pymol.cmd.center('*present')
+	pymol.cmd.zoom('*present')
+	pymol.cmd.show('cartoon', '*present')
 
 	pymol.cmd.color('palegreen', obj['query'])
 	pymol.cmd.color('palecyan', obj['subject'])

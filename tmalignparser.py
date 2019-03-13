@@ -171,9 +171,9 @@ def get_aligned_contig_sequences(alignmentlines, minlength=4):
 	lastmidline = None
 	qcontigs = []
 	tcontigs = []
-	permitted = ':'
+	permitted = ':.'
 	for qresn, midline, tresn in zip(*alignmentlines):
-		if lastmidline is None and midline not in ' ': pass
+		if lastmidline is None and midline not in permitted: pass
 		elif lastmidline is None and midline in permitted:
 			qcontigs.append(qresn)
 			tcontigs.append(tresn)
@@ -182,7 +182,7 @@ def get_aligned_contig_sequences(alignmentlines, minlength=4):
 			except IndexError: qcontigs.append(qresn)
 			try: tcontigs[-1] += tresn
 			except IndexError: tcontigs.append(tresn)
-		elif lastmidline in ' ' and midline in permitted:
+		elif (lastmidline not in permitted) and (midline in permitted):
 			qcontigs.append(qresn)
 			tcontigs.append(tresn)
 		lastmidline = midline

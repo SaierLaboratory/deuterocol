@@ -344,18 +344,47 @@ class TMalign(superpose.Superpose):
 							with open(outfile) as f:
 								for l in f: pass
 							if l.startswith('END'): continue
-						cmd = 'lvresidue {}-{}\nlvchain {}\nwrite PDB'.format(
-							indices[pdbc][start][0],
-							indices[pdbc][end][1],
-							pdbc[-1])
-						p = subprocess.Popen(['pdbcur', 
-							'xyzin', infile,
-							'xyzout', outfile],
-							stdin=subprocess.PIPE,
-							stdout=subprocess.PIPE,
-							stderr=subprocess.PIPE)
-						out, err = p.communicate(input=cmd)
-						if VERBOSITY and out.strip(): print(out)
+
+
+						satisfied = False
+						#needed because endpoints found in unsolved residues prevent cutting in their direction
+						theorleft = indices[pdbc][end][1] - indices[pdbc][start][0] + 1
+						i = 0
+						headcorrection = 0
+						tailcorrection = 0
+						while not satisfied:
+							i += 1
+
+							cmd = 'lvresidue {}-{}\nlvchain {}\nwrite PDB'.format(
+								indices[pdbc][start][0]+headcorrection,
+								indices[pdbc][end][1]-tailcorrection,
+								pdbc[-1])
+							p = subprocess.Popen(['pdbcur', 
+								'xyzin', infile,
+								'xyzout', outfile],
+								stdin=subprocess.PIPE,
+								stdout=subprocess.PIPE,
+								stderr=subprocess.PIPE)
+							out, err = p.communicate(input=cmd)
+							#if VERBOSITY and out.strip(): print(out)
+
+							empleft = None
+							for l in out.split('\n'):
+								if 'residues were deleted' in l: 
+									empleft = int(l.split()[4])
+									#print(pdbc, start+1, end+1, 'residues:', empleft, '/', theorleft)
+									break
+
+							if empleft is None:
+								warn('There is something seriously wrong with {} for helices {}-{}. Silently reverting to whole-structure alignment for this one'.format(pdbc, start+1, end+1))
+								if os.path.isfile(outfile): shutil.copy(infile, outfile)
+								satisfied = True
+							elif empleft > theorleft:
+								if i % 2: tailcorrection += 1
+								else: headcorrection += 1
+							else: satisfied = True
+						if headcorrection or tailcorrection:
+							warn('{} for helices {}-{} has TM indices assigned on gaps. Chopped off {} residues to make the bug go away'.format(pdbc, start+1, end+1, headcorrection+tailcorrection))
 
 
 	def run(self):
