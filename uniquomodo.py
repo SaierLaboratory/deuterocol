@@ -42,6 +42,25 @@ def test_transform():
 	pass
 
 
+def to_pymol_ranges(spans):
+	out = ''
+	for span in spans:
+		if span[0] == span[1]:  out += '{}+'.format(span[0])
+		else: out += '{}-{}+'.format(span[0], span[-1])
+	return out[:-2]
+		
+def compress_list(l):
+	lasti = None
+	spans = []
+	for i in l:
+		if lasti is None: spans.append([i, i])
+		elif i == (lasti + 1): spans[-1][1] = i
+		elif i == lasti: pass
+		else: spans.append([i, i])
+		lasti = i
+
+	return spans
+
 def extract_selectors(name, obj):
 	query, qchain, qtms, vs, subject, schain, stms = name.split('_')
 	seldict = {}
@@ -71,6 +90,8 @@ def extract_selectors(name, obj):
 
 	seldict['qpresent'] = '{} and c. {} and i. '.format(obj['query'], qchain)
 	seldict['spresent'] = '{} and c. {} and i. '.format(obj['subject'], schain)
+
+	#this will get ignored anyway
 	seldict['qaligned'] = '{} and c. {} and i. '.format(obj['query'], qchain)
 	seldict['saligned'] = '{} and c. {} and i. '.format(obj['subject'], schain)
 
@@ -79,14 +100,20 @@ def extract_selectors(name, obj):
 	qa = 0
 	sa = 0
 
+	qpresent = []
+	spresent = []
+
 	for q, d, s in zip(alnq, obj['distances'], alns):
-		if q is not None: seldict['qpresent'] += '{}+'.format(q)
-		if s is not None: seldict['spresent'] += '{}+'.format(s)
+		if q is not None: qpresent.append(q)
+		if s is not None: spresent.append(s)
 		if (q is not None) and (s is not None) and (d is not None):
-			seldict['qaligned'] += '{}+'.format(q)
-			seldict['saligned'] += '{}+'.format(s)
+			qpresent.append(q)
+			spresent.append(s)
 			qa += 1
 			sa += 1
+
+	seldict['qpresent'] += to_pymol_ranges(compress_list(qpresent))
+	seldict['spresent'] += to_pymol_ranges(compress_list(spresent))
 
 	print('='*80)
 	print('{}:'.format(name))

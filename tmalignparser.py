@@ -173,7 +173,7 @@ def get_aligned_contig_sequences(alignmentlines, minlength=4):
 	tcontigs = []
 	permitted = ':'
 	for qresn, midline, tresn in zip(*alignmentlines):
-		if lastmidline is None and midline in ' ': pass
+		if lastmidline is None and midline not in ' ': pass
 		elif lastmidline is None and midline in permitted:
 			qcontigs.append(qresn)
 			tcontigs.append(tresn)
