@@ -19,6 +19,14 @@ def error(*things):
 	print('[ERROR]:', *things, file=sys.stderr)
 	exit(1)
 
+def count_residues(pdbfn):
+	n = 0
+	with open(pdbfn) as f:
+		for l in f:
+			if l.startswith('ATOM'): 
+				if l[13:15] == 'CA': n += 1
+	return n
+
 def _intersection_size(spans1, spans2):
 	n = 0
 	lastn = None
@@ -354,11 +362,18 @@ class TMalign(superpose.Superpose):
 						tailcorrection = 0
 						while not satisfied:
 							i += 1
-
+							#this version requires manual inspection for residue counts but somehow doesn't segfault
 							cmd = 'lvresidue {}-{}\nlvchain {}\nwrite PDB'.format(
 								indices[pdbc][start][0]+headcorrection,
 								indices[pdbc][end][1]-tailcorrection,
 								pdbc[-1])
+
+							#this version segfaults for some reason
+							#cmd = 'lvchain {}\nlvresidue {}-{}\nwrite PDB'.format(
+							#	pdbc[-1],
+							#	indices[pdbc][start][0]+headcorrection,
+							#	indices[pdbc][end][1]-tailcorrection,
+							#	)
 							p = subprocess.Popen(['pdbcur', 
 								'xyzin', infile,
 								'xyzout', outfile],
@@ -368,23 +383,18 @@ class TMalign(superpose.Superpose):
 							out, err = p.communicate(input=cmd)
 							#if VERBOSITY and out.strip(): print(out)
 
-							empleft = None
-							for l in out.split('\n'):
-								if 'residues were deleted' in l: 
-									empleft = int(l.split()[4])
-									#print(pdbc, start+1, end+1, 'residues:', empleft, '/', theorleft)
-									break
+							try: empleft = count_residues(outfile)
+							except IOError: empleft = 0
+							#print(pdbc, empleft, theorleft, empleft > (theorleft + 5))
 
-							if empleft is None:
-								warn('There is something seriously wrong with {} for helices {}-{}. Silently reverting to whole-structure alignment for this one'.format(pdbc, start+1, end+1))
-								if os.path.isfile(outfile): shutil.copy(infile, outfile)
-								satisfied = True
-							elif empleft > theorleft:
+							if empleft > (theorleft + 5):
 								if i % 2: tailcorrection += 1
-								else: headcorrection += 1
+								#else: headcorrection += 1
+								else: tailcorrection += 1
 							else: satisfied = True
 						if headcorrection or tailcorrection:
 							warn('{} for helices {}-{} has TM indices assigned on gaps. Chopped off {} residues to make the bug go away'.format(pdbc, start+1, end+1, headcorrection+tailcorrection))
+							#print('{} {}-{} ({}/{}, chopped N-{} C-{})'.format(pdbc, indices[pdbc][start][0], indices[pdbc][end][1], empleft, theorleft, headcorrection, tailcorrection))
 
 
 	def run(self):

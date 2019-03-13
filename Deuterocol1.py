@@ -248,7 +248,7 @@ class Subunit(object):
 				start = 0
 				end = spanstr[spanstr[1:].find('-'):]
 			else:
-				print(s)
+				#print(s)
 				start, end = spanstr.split('-')
 			spans.append((int(start), int(end)))
 		return Subunit(pdbid, letter, spans)
@@ -715,9 +715,9 @@ class Deuterocol1(object):
 
 
 				#expand target_chains if necessary
-				print(target_chains)
+				#print(target_chains)
 				target_chains *= self.invfactor
-				print(target_chains)
+				#print(target_chains)
 
 				#now finalize the tclist
 				tclist = []
@@ -747,7 +747,7 @@ class Deuterocol1(object):
 						addme = True
 						for fam in rawtclist:
 							if TCID.parse_str(sl[0]) in TCID.parse_str(fam): 
-								print(sl[0], fam)
+								#print(sl[0], fam)
 								n += 1
 								addme = False
 						if addme: tclist.append(sl[0])
