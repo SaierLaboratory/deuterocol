@@ -27,6 +27,25 @@ def count_residues(pdbfn):
 				if l[13:15] == 'CA': n += 1
 	return n
 
+def truncate_to_resolved(pdbfn, chain, start, end):
+	resolved = []
+	with open(pdbfn) as f:
+		for l in f:
+			if l.startswith('ATOM'):
+				if l[13:15] == 'CA':
+					if (l[21] == chain) or ((l[21] == ' ') and (chain == 'A')):
+						resolved.append(int(l[22:26]))
+	newstart = None
+	newend = None
+	for i in range(start, end+1):
+		if i in resolved: 
+			if newstart is None: newstart = i
+			else: newstart = min(newstart, i)
+			if newend is None: newend = i
+			else: newend = max(newend, i)
+
+	return newstart - start, end - newend
+
 def _intersection_size(spans1, spans2):
 	n = 0
 	lastn = None
@@ -387,13 +406,15 @@ class TMalign(superpose.Superpose):
 							except IOError: empleft = 0
 							#print(pdbc, empleft, theorleft, empleft > (theorleft + 5))
 
+
 							if empleft > (theorleft + 5):
-								if i % 2: tailcorrection += 1
+								headcorrection, tailcorrection = truncate_to_resolved(infile, pdbc[-1], indices[pdbc][start][0], indices[pdbc][end][1])
+								#if i % 2: tailcorrection += 1
 								#else: headcorrection += 1
-								else: tailcorrection += 1
+								#else: tailcorrection += 1
 							else: satisfied = True
 						if headcorrection or tailcorrection:
-							warn('{} for helices {}-{} has TM indices assigned on gaps. Chopped off {} residues to make the bug go away'.format(pdbc, start+1, end+1, headcorrection+tailcorrection))
+							warn('{} for helices {}-{} has TM indices assigned on gaps. Chopped off {} unresolved residues (N:{}, C:{}) to make the bug go away'.format(pdbc, start+1, end+1, headcorrection+tailcorrection, headcorrection, tailcorrection))
 							#print('{} {}-{} ({}/{}, chopped N-{} C-{})'.format(pdbc, indices[pdbc][start][0], indices[pdbc][end][1], empleft, theorleft, headcorrection, tailcorrection))
 
 
