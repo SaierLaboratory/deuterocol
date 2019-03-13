@@ -67,13 +67,13 @@ class Interval(object):
 			else: return False
 		else: return False
 
-class Spans(object):
+class SpanCollection(object):
 	def __init__(self, spans=None):
 		self.spans = [] if spans is None else spans
 
 	@staticmethod
 	def parse_str(s):
-		spansobj = Spans()
+		spansobj = SpanCollection()
 		for ss in re.split('\s*,\s*', s.strip()):
 			spansobj.add([int(i) for i in ss.split('-')])
 		return spansobj
@@ -83,7 +83,7 @@ class Spans(object):
 		obj = json.loads(s)
 		intervals = []
 		for x in obj: intervals.append(Interval(x[0], x[1]))
-		return Spans(intervals)
+		return SpanCollection(intervals)
 
 	def dump_json(self):
 		obj = [[s.start, s.end] for s in self]
@@ -104,7 +104,7 @@ class Spans(object):
 		return s
 	def __getitem__(self, i): 
 		if type(i) is int: return self.spans[i]
-		else: return Spans(self.spans[i])
+		else: return SpanCollection(self.spans[i])
 
 	def to_rawlist(self):
 		out = []
@@ -129,7 +129,7 @@ class Spans(object):
 					exc1.add(i)
 					exc2.add(j)
 				if selfish: exc2.add(j)
-		spansobj = Spans()
+		spansobj = SpanCollection()
 		for s in mergeme: 
 			newinterval = self[s[0]].union(other[s[1]])
 			spansobj.add([newinterval.start, newinterval.end])
@@ -156,6 +156,32 @@ class Spans(object):
 					break
 		
 
+	def truncate_to_resolved(self, pdbfn, chain):
+		resolved = []
+		with open(pdbfn) as f:
+			for l in f:
+				if l.startswith('ATOM') and l[13:15] == 'CA':
+					if (l[21] == chain) or ((l[21] == ' ') and chain == 'A'):
+						resolved.append(int(l[22:26]))
+
+		deleteme = []
+		for i, span in enumerate(self):
+			newstart = None
+			newend = None
+			for j in range(span.start, span.end+1):
+				if j in resolved:
+					if newstart is None: newstart = j
+					else: newstart = min(newstart, j)
+
+					if newend is None: newend = j
+					else: newend = max(newend, j)
+
+			span.start = newstart
+			span.end = newend
+			if span.start is None or span.end is None: deleteme.append(i)
+
+		for i in deleteme[::-1]: self.spans.pop(i)
+		
 class TCID(object):
 	def __init__(self):
 		self.tcid = ['', '', '', '', '', '']
@@ -532,6 +558,7 @@ class Deuterocol1(object):
 
 		opmspans = self.fetch_spans(pdbidlist, 'opm')
 		pdbtmspans = self.fetch_spans(pdbidlist, 'pdbtm')
+
 		stridespans = self.gen_stride_spans(pdbidlist, 'stride')
 
 		unionspans = {}
@@ -543,6 +570,9 @@ class Deuterocol1(object):
 			unionspans[pdbid] = opmspans[pdbid].extend(pdbtmspans[pdbid])
 			tmspans[pdbid] = unionspans[pdbid].extend(stridespans[pdbid], selfish=True)
 			tmspans[pdbid].merge()
+			print(pdbid, tmspans[pdbid])
+			tmspans[pdbid].truncate_to_resolved('{}/pdbs/{}.pdb'.format(self.outdir, pdbid[:4]), pdbid[-1])
+			print(pdbid, tmspans[pdbid])
 
 			if len(tmspans[pdbid]) <= 2: continue
 			indextable[pdbid] = [[s.start, s.end] for s in tmspans[pdbid]]
@@ -564,16 +594,24 @@ class Deuterocol1(object):
 
 	def gen_stride_spans(self, pdbidlist, db='stride'):
 		#TODO: a practical way to fold this back into a dbtool
+		if not os.path.isdir('{}/stride'.format(self.outdir)): os.mkdir('{}/stride'.format(self.outdir))
+
 		spans = {}
 		altspans = {}
-		for pdbid in sorted(pdbidlist): spans[pdbid] = Spans()
+		for pdbid in sorted(pdbidlist): spans[pdbid] = SpanCollection()
 		pdbs = set([pdbid[:4] for pdbid in pdbidlist])
-		for pdb in pdbs: altspans[pdb] = Spans()
+		for pdb in pdbs: altspans[pdb] = SpanCollection()
 
 		for pdb in pdbs:
-			cmd = ['stride', '{}/pdbs/{}.pdb'.format(self.outdir, pdb)]
-			try: out = subprocess.check_output(cmd)
-			except subprocess.CalledProcessError: continue
+			if os.path.isfile('{}/stride/{}.stride'.format(self.outdir, pdb)): 
+				with open('{}/stride/{}.stride'.format(self.outdir, pdb)) as f:
+					out = f.read()
+			else:
+				cmd = ['stride', '{}/pdbs/{}.pdb'.format(self.outdir, pdb)]
+				try: 
+					out = subprocess.check_output(cmd)
+					with open('{}/stride/{}.stride'.format(self.outdir, pdb), 'w') as f: f.write(out)
+				except subprocess.CalledProcessError: continue
 			for l in out.split('\n'):
 				if not l.strip(): continue
 				#TODO: generalize to allow beta barrels too
@@ -594,8 +632,8 @@ class Deuterocol1(object):
 	def fetch_spans(self, pdbidlist, db='opm'):
 		spans = {}
 		altspans = {}
-		for pdbid in sorted(pdbidlist): spans[pdbid] = Spans()
-		for pdbid in sorted(pdbidlist): altspans[pdbid[:4]] = Spans()
+		for pdbid in sorted(pdbidlist): spans[pdbid] = SpanCollection()
+		for pdbid in sorted(pdbidlist): altspans[pdbid[:4]] = SpanCollection()
 
 		with open('{}/{}/ASSIGNMENTS.TSV'.format(self.tmdatadir, db)) as f:
 			for l in f:
@@ -604,9 +642,9 @@ class Deuterocol1(object):
 				sl = l.split()
 				dbid = sl[0][:4].upper() + sl[0][4:]
 				if dbid in spans:
-					spans[dbid] = Spans.parse_str(sl[1])
+					spans[dbid] = SpanCollection.parse_str(sl[1])
 				elif dbid[:4] in altspans:
-					altspans[dbid[:4]] = Spans.parse_str(sl[1])
+					altspans[dbid[:4]] = SpanCollection.parse_str(sl[1])
 		for pdbid in spans:
 			#if spans[pdbid] is None:
 			if len(spans[pdbid]) == 0:

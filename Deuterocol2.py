@@ -52,9 +52,9 @@ class Paragraph(object):
 		g = open('{}/config/indices.json'.format(self.outdir), 'w')
 		with open('{}/indices.json'.format(self.d1dir)) as f: 
 			indobj = json.loads(f.read())
-			#for pdbid in sorted(indobj): indices[pdbid] = Deuterocol1.Spans.parse_json(indobj[pdbid])
+			#for pdbid in sorted(indobj): indices[pdbid] = Deuterocol1.SpanCollection.parse_json(indobj[pdbid])
 			for pdbid in sorted(indobj): 
-				indices[pdbid] = Deuterocol1.Spans()
+				indices[pdbid] = Deuterocol1.SpanCollection()
 				for span in indobj[pdbid]: indices[pdbid].add(span)
 				g.write('{}\t{}\n'.format(pdbid, indobj[pdbid]))
 				
