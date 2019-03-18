@@ -199,7 +199,7 @@ class TMalign(superpose.Superpose):
 							for qfrag in qfrags:
 								qcontig = qatomseq.gapless_align_string(qfrag, start=qistart)
 								if qcontig is None: 
-									if len(qfrag) < minl_relevant: continue
+									#if len(qfrag) < minl_relevant: continue
 									#print(qfrag, qatomseq)
 									continue
 
@@ -211,8 +211,9 @@ class TMalign(superpose.Superpose):
 							for sfrag in sfrags:
 								scontig = satomseq.gapless_align_string(sfrag, start=sistart)
 								#print(sfrag, sistart, scontig, satomseq)
-								if scontig is None: 
-									if len(sfrag) < minl_relevant: continue
+								if scontig is None:
+									#if len(sfrag) < minl_relevant: continue
+									continue
 
 								saln_combined = saln_combined + scontig
 								#sistart = scontig.get_range()[-1] + 1
