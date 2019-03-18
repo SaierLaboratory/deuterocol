@@ -22,6 +22,7 @@ class OPM(object):
 
 
 def _scroll_json(url):
+	''' Collects all pages for a multipage JSON '''
 	out = []
 	f = urllib.urlopen(url)
 	raw = f.read()
@@ -41,6 +42,7 @@ def _scroll_json(url):
 		out += obj['objects']
 	return json.dumps(out)
 def get_database(prefix='.'):
+	''' (Deprecated) Fetched the OPM database dump '''
 	print('Fetching database...', file=sys.stderr)
 	with open('{}/opmall.json'.format(prefix), 'w') as f: pass
 
@@ -56,6 +58,7 @@ def get_database(prefix='.'):
 	exit()
 
 def build_database(fn, prefix):
+	''' Unpacked the OPM database and converted it into the ASSIGNMENTS.TSV '''
 	print('Unpacking database...', file=sys.stderr)
 
 	#db = {'atlas':[], 'citation':[], 'class':[], 'classification':[], 'family':[], 'history':[], 'membrane':[], 'protein':[], 'relatedproteins':[], 'relatedproteinstemp':[], 'relatedproteinstempnew':[], 'species':[], 'subunits':[], 'superfamily':[], 'type':[]}
@@ -153,6 +156,8 @@ def build_database(fn, prefix):
 			if len(last100) > 100: last100.pop(0)
 
 def correct_spans(segments, pdbid=None):
+	''' Corrected some of the easier formatting issues. TODO: handle re-entrants properly '''
+
 	spans = re.split(r'\),?\s*[0-9][0-9]?\s*\(?', segments)
 	segstr = ''
 	trouble = '2he6'
@@ -178,6 +183,7 @@ def correct_spans(segments, pdbid=None):
 	writeme.append('{}_{}\t{}\n'.format(pdbid, letter, segstr[:-1]))
 
 def process_opm_csv(outdir):
+	''' Parsed OPM CSVs '''
 	if not os.path.isdir(outdir): os.mkdir(outdir)
 
 	try: urlopen = urllib.urlopen
@@ -200,6 +206,10 @@ def process_opm_csv(outdir):
 	
 
 def process_opm_scroll_primaries(outdir, force=False):
+	''' Processed primary structure records from OPM, linking secondary representations to their primaries 
+
+	TODO: Put everything in a class and break up the easily decoupled steps into separate methods
+	'''
 	if not os.path.isdir(outdir): os.mkdir(outdir)
 
 	try: urlopen = urllib.urlopen
@@ -376,51 +386,8 @@ def process_opm_scroll_primaries(outdir, force=False):
 	else: print('OPM-specific tcmap found, skipping remapping')
 				
 
-	exit()
-
-
-	### Lossy legacy code
-
-	if not os.path.isdir('{}/sequences'.format(outdir)): os.mkdir('{}/sequences'.format(outdir))
-	for pdbid in sorted(primary_structures):
-		for subunit in primary_structures[pdbid]['subunits']:
-			chain = subunit['protein_letter']
-			pdbc = '{}_{}'.format(pdbid.upper(), chain)
-
-			if force or not os.path.isfile('{}/sequences/{}.fa'.format(outdir, pdbc)):
-
-				if pdbid in sec2prim:
-					try: sequences[pdbc] = fetch_seq(pdbc)
-					except subprocess.CalledProcessError: 
-						try: sequences[pdbc] = fetch_seq('{}_{}'.format(sec2prim[pdbid], chain))
-						except subprocess.CalledProcessError:
-							print('Could not get a sequence for {}, try updating pdbaa or doing it manually'.format(pdbc))
-							#continue
-				else: sequences[pdbc] = fetch_seq(pdbc)
-
-				if is_low_quality_sequence(sequences[pdbc]): 
-					print('Low quality sequence: {}'.format(pdbc))
-					continue
-				else:
-					 with open('{}/sequences/{}.fa'.format(outdir, pdbc), 'w') as f: f.write(sequences[pdbc])
-
-	tcdb2pdb = {}
-				
-	for pdbid in sorted(primary_structures):
-		for subunit in primary_structures[pdbid]['subunits']:
-			chain = subunit['protein_letter']
-			pdbc = '{}_{}'.format(pdbid.upper(), chain)
-			fn = '{}/sequences/{}.fa'.format(outdir, pdbc)
-
-			tcid = quickblast(fn, expect=1e-5, ident=0.95)
-			if tcid:
-				try: tcdb2pdb[tcid].append(pdbc)
-				except KeyError: tcdb2pdb[tcid] = [pdbc]
-
-	for tcid in sorted(tcdb2pdb):
-		print(tcid, sorted(tcdb2pdb[tcid]))
-			
 def extract_pdb_sequences(f):
+	''' Grabs sequences from the ATOM records in a PDB file '''
 	sequences = {}
 	for l in f:
 		if not l.strip(): continue
@@ -436,11 +403,8 @@ def extract_pdb_sequences(f):
 		except KeyError: sequences[chain] = resn
 	return sequences
 		
-'''	
-ATOM     22  CA  LEU A  36     -50.189  22.768 -17.245  1.00397.43           C     
-'''
-
 def is_low_quality_sequence(fasta):
+	''' Heuristic for a sequence being too incomplete to even BLAST '''
 	seq = re.sub('[^A-Za-z*]', '', fasta[fasta.find('\n'):])
 	if seq.count('X') > (len(seq)*.75): return True
 	elif len(seq) < 20: return True
@@ -448,6 +412,7 @@ def is_low_quality_sequence(fasta):
 
 
 def quickblast(fn, expect=1e-5, ident=0.95):
+	''' BLAST a sequence against TCDB. Requires that the TCDB BLAST database be somewhere in $BLASTDB '''
 	out = subprocess.check_output(['blastp', '-db', 'tcdb', '-outfmt', '6', '-evalue', str(expect), '-max_target_seqs', '1', '-query', fn])
 	if not out.strip(): return None
 
@@ -463,6 +428,7 @@ def quickblast(fn, expect=1e-5, ident=0.95):
 
 
 def fetch_seq(pdbc):
+	''' Grabs a sequence from PDBAA '''
 	p = subprocess.Popen(['blastdbcmd', '-db', 'pdbaa', '-entry', pdbc, '-target_only'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	out, err = p.communicate()
 
@@ -472,24 +438,9 @@ if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Manages OPM databases. Automatically fetches the OPM database if no options are specified. Run without any arguments, opm_dbtool will retrieve the OPM database, store i in opm, and unpack it.')
 
-	#parser.add_argument('-d', '--db', default='opmall.json', help='name of concatenated database file (default:opmall.json)')
-	#parser.add_argument('-b', '--build-db', action='store_true', help='(re)build database from an existing opmall.json file (available at http://opm.phar.umich.edu/OPM-2018-07-26.json)')
 	parser.add_argument('directory', nargs='?', default='opm', help='directory to store database in')
 	parser.add_argument('-f', '--force-refresh', action='store_true', help='force overwrite of existing database. Functionally equivalent to removing the old database and rerunning.')
-	#parser.add_argument('-x', '--extract-sequences', action='store_true', help='extract sequences from OPM database too')
 
 	args = parser.parse_args()
-
-	#subunits is missing substantial information (skipped a join?)
-	#if args.build_db: build_database(args.db, args.directory)
-	#else:
-	#	if not os.path.isdir(args.directory): os.mkdir(args.directory)
-	#	if args.force_refresh or not os.path.isfile('{}/{}'.format(args.directory, args.db)): get_database(args.directory)
-	#	build_database('{}/{}'.format(args.directory, args.db), args.directory)
-
-	#if args.extract_sequences:
-
-	#this source doesn't have secondary representations
-	#process_opm_csv(outdir=args.directory)
 
 	process_opm_scroll_primaries(outdir=args.directory, force=args.force_refresh)
