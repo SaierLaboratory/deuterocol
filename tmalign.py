@@ -210,15 +210,10 @@ class TMalign(superpose.Superpose):
 								#print(sfrag, sistart, scontig, satomseq)
 								if scontig is None: 
 									if len(sfrag) < minl_relevant: continue
-									#print(sfn)
-									#print(satomseq.iterable)
-									#print(out)
-									#exit(1)
-									continue
 
 								saln_combined = saln_combined + scontig
 								#sistart = scontig.get_range()[-1] + 1
-								sistart = scontig.get_range()[-1] - 2
+								sistart = scontig.get_range()[-1] + 1
 
 							n_qaligned = _intersection_size(qaln_combined.get_ranges(), obj['qindices'])
 							n_saligned = _intersection_size(saln_combined.get_ranges(), obj['sindices'])
@@ -228,6 +223,13 @@ class TMalign(superpose.Superpose):
 
 							sp.qtmlen = obj['qlen']
 							sp.stmlen = obj['slen']
+
+							if n_qaligned > sp.qtmlen: 
+								print(obj)
+								exit()
+							if n_saligned > sp.stmlen: 
+								print(obj)
+								exit()
 
 							sp.qtmcov = n_qaligned / sp.qtmlen
 							sp.stmcov = n_saligned / sp.stmlen

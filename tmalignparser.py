@@ -149,7 +149,7 @@ class NumberedSequence(object):
 		newiter = []
 		while siter or oiter:
 			if not siter: newiter.append(oiter.pop(0))
-			elif  not oiter: newiter.append(siter.pop(0))
+			elif not oiter: newiter.append(siter.pop(0))
 			elif siter[0][1] <= oiter[0][1]: newiter.append(siter.pop(0))
 			else: newiter.append(oiter.pop(0))
 		return NumberedSequence(newiter)
