@@ -125,9 +125,12 @@ class TMalign(superpose.Superpose):
 						if p.returncode:
 							#29: file not found, e.g. from being incompetently eliminated from the pipeline
 							#174: segfault, seems to be from having empty structures
-							if p.returncode in {29, 174}: 
+							#if p.returncode in {29, 174}: 
+							if p.returncode in {174}: 
 								n += 1
 								continue
+							elif p.returncode in {29}:
+								raise IOError('{} or {} does not exist'.format(qfn, sfn))
 							else: raise Exception(err)
 						tf.flush()
 						tf.seek(0)
@@ -368,12 +371,13 @@ class TMalign(superpose.Superpose):
 						end = start + bundle - 1
 						infile = '{}/../pdbs/{}.pdb'.format(famdir, pdb)
 						outfile = '{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdbc, start+1, end+1)
-						if not os.path.isfile(infile): continue
+						if not os.path.isfile(infile): raise IOError('Could not find {}'.format(infile))
 						if os.path.isfile(outfile) and os.path.getsize(outfile):
-							with open(outfile) as f:
-								for l in f: pass
-							if l.startswith('END'): continue
-
+							#with open(outfile) as f:
+							#	for l in f: 
+							#		pass
+							#		#if l.startswith('END'): continue
+							continue
 
 						satisfied = False
 						#needed because endpoints found in unsolved residues prevent cutting in their direction
@@ -383,8 +387,10 @@ class TMalign(superpose.Superpose):
 						tailcorrection = 0
 						while not satisfied:
 							i += 1
+							#for some reason, aniso records are causing segfaults
+							cmd = 'noanisou'
 							#this version requires manual inspection for residue counts but somehow doesn't segfault
-							cmd = 'lvresidue {}-{}\nlvchain {}\nwrite PDB'.format(
+							cmd += '\nlvresidue {}-{}\nlvchain {}\nwrite PDB'.format(
 								indices[pdbc][start][0]+headcorrection,
 								indices[pdbc][end][1]-tailcorrection,
 								pdbc[-1])
