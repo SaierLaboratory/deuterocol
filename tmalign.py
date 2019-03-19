@@ -27,6 +27,41 @@ def count_residues(pdbfn):
 				if l[13:15] == 'CA': n += 1
 	return n
 
+def manually_cut(ifn, ofn, chain, start, end):
+
+	intended = (start, end)
+	def intersects(a, b):
+		if (a[0] < b[0] and a[1] < b[0]): return False
+		elif (a[0] > b[1] and a[1] > b[1]): return False
+		else: return True
+	
+	with open(ifn) as infile:
+		with open(ofn, 'w') as outfile:
+			for l in infile:
+				if l.startswith('DBREF '):
+					if l[12] != chain: continue
+					elif l[14:18].strip(): 
+						thisref = (int(l[14:18]), int(l[20:24]))
+						if not intersects(thisref, intended): continue
+				elif l.startswith('SEQRES'):
+					if l[11] != chain: continue
+				elif l.startswith('HET   '):
+					if l[12] != chain: continue
+				#elif l.startswith('ANISOU'): continue
+				elif l.startswith('ATOM  '):
+					if l[21] != chain: continue
+					resi = int(l[22:26])
+					if not (start <= resi <= end): continue
+				elif l.startswith('TER   '):
+					if l[21] != chain: continue
+					resi = int(l[22:26])
+					if not (start <= resi <= end): continue
+				elif l.startswith('HETATM'):
+					if l[21] != chain: continue
+					resi = int(l[22:26])
+					if not (start <= resi <= end): continue
+				outfile.write(l)
+
 def truncate_to_resolved(pdbfn, chain, start, end):
 	resolved = []
 	with open(pdbfn) as f:
@@ -127,6 +162,7 @@ class TMalign(superpose.Superpose):
 							#174: segfault, seems to be from having empty structures
 							#if p.returncode in {29, 174}: 
 							if p.returncode in {174}: 
+								raise IOError('{} or {} caused a problem!'.format(qfn, sfn))
 								n += 1
 								continue
 							elif p.returncode in {29}:
@@ -232,6 +268,7 @@ class TMalign(superpose.Superpose):
 								print(obj)
 								exit()
 							if n_saligned > sp.stmlen: 
+								print(n_saligned, sp.stmlen)
 								print(obj)
 								exit()
 
@@ -389,12 +426,13 @@ class TMalign(superpose.Superpose):
 						while not satisfied:
 							i += 1
 							#for some reason, aniso records are causing segfaults
-							cmd = 'noanisou'
-							#this version requires manual inspection for residue counts but somehow doesn't segfault
-							cmd += '\nlvresidue {}-{}\nlvchain {}\nwrite PDB'.format(
+							cmd = 'noanisou\n'
+							cmd += 'lvresidue {}-{}\nlvchain {}\nwrite PDB\n'.format(
 								indices[pdbc][start][0]+headcorrection,
 								indices[pdbc][end][1]-tailcorrection,
 								pdbc[-1])
+
+							#if pdbc == '5DO7_A': print('>>{}<<'.format(outfile), cmd)
 
 							#this version segfaults for some reason
 							#cmd = 'lvchain {}\nlvresidue {}-{}\nwrite PDB'.format(
@@ -421,10 +459,15 @@ class TMalign(superpose.Superpose):
 								#if i % 2: tailcorrection += 1
 								#else: headcorrection += 1
 								#else: tailcorrection += 1
+							elif empleft == 0: 
+								#rather than debug pdbcur to see why it keeps segfaulting, just cut the PDBs manually
+								manually_cut(infile, outfile, chain=pdbc[-1], start=indices[pdbc][start][0], end=indices[pdbc][end][1])
+								satisfied = True * 1000
 							else: satisfied = True
 						if headcorrection or tailcorrection:
 							warn('{} for helices {}-{} has TM indices assigned on gaps. Chopped off {} unresolved residues (N:{}, C:{}) to make the bug go away'.format(pdbc, start+1, end+1, headcorrection+tailcorrection, headcorrection, tailcorrection))
 							#print('{} {}-{} ({}/{}, chopped N-{} C-{})'.format(pdbc, indices[pdbc][start][0], indices[pdbc][end][1], empleft, theorleft, headcorrection, tailcorrection))
+		exit()
 
 
 	def run(self):
