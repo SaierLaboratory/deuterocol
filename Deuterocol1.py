@@ -570,9 +570,9 @@ class Deuterocol1(object):
 			unionspans[pdbid] = opmspans[pdbid].extend(pdbtmspans[pdbid])
 			tmspans[pdbid] = unionspans[pdbid].extend(stridespans[pdbid], selfish=True)
 			tmspans[pdbid].merge()
-			print(pdbid, tmspans[pdbid])
+			#print(pdbid, tmspans[pdbid])
 			tmspans[pdbid].truncate_to_resolved('{}/pdbs/{}.pdb'.format(self.outdir, pdbid[:4]), pdbid[-1])
-			print(pdbid, tmspans[pdbid])
+			#print(pdbid, tmspans[pdbid])
 
 			if len(tmspans[pdbid]) <= 2: continue
 			indextable[pdbid] = [[s.start, s.end] for s in tmspans[pdbid]]

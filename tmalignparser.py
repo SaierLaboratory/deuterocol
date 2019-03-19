@@ -9,6 +9,15 @@ import os
 try: from Bio.PDB import protein_letters_3to1 as CODE
 except AttributeError: from Bio.PDB import to_one_letter_codes as CODE
 
+def collapse(spans):
+	newspans = []
+	for span in spans:
+		if not newspans: newspans.append(span)
+		elif newspans[-1][-1] >= span[0]: newspans[-1][-1] = span[-1]
+		else: newspans.append(span)
+	return newspans
+	
+
 class NumberedSequence(object):
 	def __init__(self, iterable=None):
 		self.iterable = [] if iterable is None else iterable

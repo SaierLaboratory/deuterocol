@@ -98,8 +98,7 @@ def _intersection_size(spans1, spans2):
 				n += span2[1] - span1[0] + 1
 			else: 
 				n += 0
-			if lastn is not None and n < lastn: 
-				print(span1, span2)
+			#if lastn is not None and n < lastn: print(span1, span2)
 		lastn = n
 	return n
 
@@ -232,8 +231,10 @@ class TMalign(superpose.Superpose):
 
 							qistart = None
 							qaln_combined = tmalignparser.NumberedSequence()
+							qcontigs = []
 							for qfrag in qfrags:
 								qcontig = qatomseq.gapless_align_string(qfrag, start=qistart)
+								qcontigs.append(qcontig)
 								if qcontig is None: 
 									#if len(qfrag) < minl_relevant: continue
 									#print(qfrag, qatomseq)
@@ -241,6 +242,9 @@ class TMalign(superpose.Superpose):
 
 								qaln_combined = qaln_combined + qcontig
 								qistart = qcontig.get_range()[-1] + 1
+							#print(qcontigs)
+							#print(qaln_combined)
+							#print([len(x) for x in qcontigs], '=', len(qaln_combined))
 
 							sistart = None
 							saln_combined = tmalignparser.NumberedSequence()
@@ -255,8 +259,8 @@ class TMalign(superpose.Superpose):
 								#sistart = scontig.get_range()[-1] + 1
 								sistart = scontig.get_range()[-1] + 1
 
-							n_qaligned = _intersection_size(qaln_combined.get_ranges(), obj['qindices'])
-							n_saligned = _intersection_size(saln_combined.get_ranges(), obj['sindices'])
+							n_qaligned = _intersection_size(tmalignparser.collapse(qaln_combined.get_ranges()), tmalignparser.collapse(obj['qindices']))
+							n_saligned = _intersection_size(tmalignparser.collapse(saln_combined.get_ranges()), tmalignparser.collapse(obj['sindices']))
 
 							sp.qlen = len(qatomseq)
 							sp.slen = len(satomseq)
@@ -265,12 +269,13 @@ class TMalign(superpose.Superpose):
 							sp.stmlen = obj['slen']
 
 							if n_qaligned > sp.qtmlen: 
+								print(n_qaligned, sp.qtmlen)
 								print(obj)
-								exit()
+								raise IndexError('whyyyyyyyyyyyyyyyyyyyyyyyyyy')
 							if n_saligned > sp.stmlen: 
 								print(n_saligned, sp.stmlen)
 								print(obj)
-								exit()
+								raise IndexError('whyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy')
 
 							sp.qtmcov = n_qaligned / sp.qtmlen
 							sp.stmcov = n_saligned / sp.stmlen
@@ -413,7 +418,6 @@ class TMalign(superpose.Superpose):
 						if os.path.isfile(outfile) and os.path.getsize(outfile): continue
 
 						manually_cut(infile, outfile, chain=pdbc[-1], start=indices[pdbc][start][0], end=indices[pdbc][end][1])
-		exit()
 
 
 	def run(self):
