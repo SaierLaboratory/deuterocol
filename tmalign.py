@@ -410,63 +410,9 @@ class TMalign(superpose.Superpose):
 						infile = '{}/../pdbs/{}.pdb'.format(famdir, pdb)
 						outfile = '{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdbc, start+1, end+1)
 						if not os.path.isfile(infile): raise IOError('Could not find {}'.format(infile))
-						if os.path.isfile(outfile) and os.path.getsize(outfile):
-							#with open(outfile) as f:
-							#	for l in f: 
-							#		pass
-							#		#if l.startswith('END'): continue
-							continue
+						if os.path.isfile(outfile) and os.path.getsize(outfile): continue
 
-						satisfied = False
-						#needed because endpoints found in unsolved residues prevent cutting in their direction
-						theorleft = indices[pdbc][end][1] - indices[pdbc][start][0] + 1
-						i = 0
-						headcorrection = 0
-						tailcorrection = 0
-						while not satisfied:
-							i += 1
-							#for some reason, aniso records are causing segfaults
-							cmd = 'noanisou\n'
-							cmd += 'lvresidue {}-{}\nlvchain {}\nwrite PDB\n'.format(
-								indices[pdbc][start][0]+headcorrection,
-								indices[pdbc][end][1]-tailcorrection,
-								pdbc[-1])
-
-							#if pdbc == '5DO7_A': print('>>{}<<'.format(outfile), cmd)
-
-							#this version segfaults for some reason
-							#cmd = 'lvchain {}\nlvresidue {}-{}\nwrite PDB'.format(
-							#	pdbc[-1],
-							#	indices[pdbc][start][0]+headcorrection,
-							#	indices[pdbc][end][1]-tailcorrection,
-							#	)
-							p = subprocess.Popen(['pdbcur', 
-								'xyzin', infile,
-								'xyzout', outfile],
-								stdin=subprocess.PIPE,
-								stdout=subprocess.PIPE,
-								stderr=subprocess.PIPE)
-							out, err = p.communicate(input=cmd)
-							#if VERBOSITY and out.strip(): print(out)
-
-							try: empleft = count_residues(outfile)
-							except IOError: empleft = 0
-							#print(pdbc, empleft, theorleft, empleft > (theorleft + 5))
-
-
-							if empleft > (theorleft + 5):
-								headcorrection, tailcorrection = truncate_to_resolved(infile, pdbc[-1], indices[pdbc][start][0], indices[pdbc][end][1])
-								#if i % 2: tailcorrection += 1
-								#else: headcorrection += 1
-								#else: tailcorrection += 1
-							elif empleft == 0: 
-								#rather than debug pdbcur to see why it keeps segfaulting, just cut the PDBs manually
-								manually_cut(infile, outfile, chain=pdbc[-1], start=indices[pdbc][start][0], end=indices[pdbc][end][1])
-								satisfied = True * 1000
-							else: satisfied = True
-						if headcorrection or tailcorrection:
-							warn('{} for helices {}-{} has TM indices assigned on gaps. Chopped off {} unresolved residues (N:{}, C:{}) to make the bug go away'.format(pdbc, start+1, end+1, headcorrection+tailcorrection, headcorrection, tailcorrection))
-							#print('{} {}-{} ({}/{}, chopped N-{} C-{})'.format(pdbc, indices[pdbc][start][0], indices[pdbc][end][1], empleft, theorleft, headcorrection, tailcorrection))
+						manually_cut(infile, outfile, chain=pdbc[-1], start=indices[pdbc][start][0], end=indices[pdbc][end][1])
 		exit()
 
 
