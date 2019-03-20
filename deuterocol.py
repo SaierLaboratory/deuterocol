@@ -67,13 +67,13 @@ class Deuterocol(object):
 		elif params.prop == 'outdir': self.outdir = params.val[0]
 		elif params.prop == 'bundle': self.bundle = int(params.val[0])
 		elif params.prop == 'children': self.children = int(params.val[0])
-		elif params.prop == 'tmdata': self.tmdatadir = params.val[0]
+		elif params.prop == 'tmdata': self.tmdata = params.val[0]
 		elif params.prop == 'min_tms': self.min_tms = int(params.val[0])
 		#2 vals required
 
 	def get_children(self, tclist, level=4):
 		alltcdb = TCIDCollection()
-		with open('{}/tcmap.tsv'.format(self.tmdatadir)) as f:
+		with open('{}/tcmap.tsv'.format(self.tmdata)) as f:
 			for l in f:
 				if not l.strip(): continue
 				elif l.lstrip().startswith('#'): continue
@@ -124,7 +124,7 @@ class Deuterocol(object):
 			s = 'set bundle {}\n'.format(self.bundle)
 			f.write(s)
 
-			s = 'set tmdata {}\n'.format(self.tmdatadir)
+			s = 'set tmdata {}\n'.format(self.tmdata)
 			f.write(s)
 
 			s = 'set min_tms {}\n'.format(self.min_tms)
@@ -149,13 +149,13 @@ class Deuterocol(object):
 		self.write_configuration()
 
 		Deuterocol1.info('Running Deuterocol 1...')
-		deut1 = Deuterocol1.Deuterocol1(tmdatadir=self.tmdatadir, outdir='{}/deuterocol1'.format(self.outdir), 
+		deut1 = Deuterocol1.Deuterocol1(tmdatadir=self.tmdata, outdir='{}/deuterocol1'.format(self.outdir), 
 			invert=self.generate_negative, inclusive=self.generate_negative, 
 		)
 		deut1.run(*(self.fams1 + self.fams2), force=self.force)
 
 		Deuterocol1.info('Running Deuterocol 2...')
-		deut2 = Deuterocol2.Deuterocol2(tmdatadir=self.tmdatadir, d1dir='{}/deuterocol1'.format(self.outdir),
+		deut2 = Deuterocol2.Deuterocol2(tmdatadir=self.tmdata, d1dir='{}/deuterocol1'.format(self.outdir),
 			outdir=self.outdir, bundle=self.bundle, allow_internal=self.allow_internal
 		)
 		deut2.run(self.fams1, self.fams2)
@@ -188,12 +188,12 @@ if __name__ == '__main__':
 	parser.add_argument('--allow-internal', action='store_true', help='Allow within-TCID comparisons')
 	parser.add_argument('--skip-cut', action='store_true', help='Skip cutting step. Only use this if all PDBs have been cut.')
 	parser.add_argument('--bundle', type=int, default=None, help='Bundle size')
-	parser.add_argument('--children', type=int, default=4, help='What TC-ID level to split families to')
+	parser.add_argument('--children', type=int, default=None, help='What TC-ID level to split families to')
 	if 'TMDATA' in os.environ: parser.add_argument('--tmdata', default=os.environ['TMDATA'], help='Where tmdata is (default: $TMDATA == {})'.format(os.environ['TMDATA']))
-	else: parser.add_argument('--tmdata', default='tmdata', help='Where tmdata is (default: tmdata)')
-	parser.add_argument('--min-tms', type=int, default=3, help='Minimum TMSs required to process an alignment')
+	else: parser.add_argument('--tmdata', default=None, help='Where tmdata is (default: tmdata)')
+	parser.add_argument('--min-tms', type=int, default=None, help='Minimum TMSs required to process an alignment')
 	parser.add_argument('--fams1', nargs='+', help='First set of families')
-	parser.add_argument('--fams2', nargs='*', help='Second set of families. Leave blank to generate a negative control')
+	parser.add_argument('--fams2', nargs='+', help='Second set of families. Specify "negative" to generate a negative control (not reimplemented yet)')
 
 	parser.add_argument('outdir', nargs='?')
 	args = parser.parse_args()
@@ -201,4 +201,15 @@ if __name__ == '__main__':
 	deuterocol = Deuterocol() if not args.outdir else Deuterocol(outdir=args.outdir)
 	if args.config: 
 		with open(args.config) as f: deuterocol.parse_config(f.read())
+
+	if args.force: deuterocol.force = True
+	if args.allow_internal: deuterocol.allow_internal = True
+	if args.skip_cut: deuterocol.skip_cut = True
+	if args.bundle: deuterocol.bundle = args.bundle
+	if args.children: deuterocol.children = args.children
+	#TODO: reconcile with cfg
+	if args.tmdata: deuterocol.tmdata = args.tmdata
+	if args.min_tms: deuterocol.min_tms = args.min_tms
+	if args.fams1: deuterocol.fams1 = args.fams1
+	if args.fams2: deuterocol.fams2 = args.fams2
 	deuterocol.run()
