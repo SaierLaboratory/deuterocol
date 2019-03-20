@@ -74,7 +74,6 @@ class Paragraph(object):
 						copyme.add(pdbid[:4])
 		#for fn in sorted(os.listdir('{}/pdbs'.format(self.d1dir))):
 		for fn in sorted(copyme):
-			#shutil.copy('{}/pdbs/{}'.format(self.d1dir, fn), '{}/../pdbs/{}'.format(self.outdir, fn))
 			shutil.copy('{}/pdbs/{}.pdb'.format(self.d1dir, fn), '{}/../pdbs/{}.pdb'.format(self.outdir, fn))
 
 		commands = []
@@ -178,6 +177,7 @@ class Deuterocol2(object):
 		self.bundle = bundle
 
 	def run(self, famlist1, famlist2):
+		Deuterocol1.info('Retrieving structures...')
 		if famlist2 == ['auto']:
 			famlist2 = []
 			with open('{}/pdblist.json'.format(self.d1dir)) as f:
@@ -213,6 +213,7 @@ class Deuterocol2(object):
 		
 		if not os.path.isdir(self.outdir): os.mkdir(self.outdir)
 
+		Deuterocol1.info('Recording intended alignments...')
 		done = []
 		for fam1 in sorted(pdblist[0]):
 			for fam2 in sorted(pdblist[1]):

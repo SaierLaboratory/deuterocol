@@ -103,9 +103,10 @@ def _intersection_size(spans1, spans2):
 	return n
 
 class TMalign(superpose.Superpose):
-	def __init__(self, d2dir='deuterocol2', force=False, skip_cut=True):
+	def __init__(self, d2dir='deuterocol2', force=False, skip_cut=True, min_tms=3):
 		superpose.Superpose.__init__(self, d2dir=d2dir, force=force)
 		self.skip_cut = skip_cut
+		self.min_tms = min_tms
 
 	def main(self, famdir):
 		done = []
@@ -142,8 +143,15 @@ class TMalign(superpose.Superpose):
 							n += 1
 							continue
 						if not n % 100:
-							info('Finished {}/{} alignments({:0.2f}s since last message)'.format(n, todo, superpose.time.time() - t))
+							#TODO: fix this progress bar thing
+							info('Finished {}/{} alignments ({:0.2f}s since last message)'.format(n, todo, superpose.time.time() - t))
 							t = superpose.time.time()
+						if len(obj['qindices']) < self.min_tms: 
+							n += 1
+							continue
+						if len(obj['sindices']) < self.min_tms: 
+							n += 1
+							continue
 						query, subject = obj['name'].split('_vs_')
 						tf = tempfile.NamedTemporaryFile()
 						qfn = '{}/../cut_pdbs/{}.pdb'.format(famdir, query)
@@ -404,20 +412,27 @@ class TMalign(superpose.Superpose):
 		
 		for pdb in sorted(cutme):
 			for pdbc in chains[pdb]:
-				if len(indices[pdbc]) <= 2: continue
+				#if len(indices[pdbc]) <= 2: continue
 				#if bundle >= len(indices[pdbc]): 
 				if False:
 					shutil.copy('{}/../pdbs/{}.pdb'.format(famdir, pdb), 
 						'{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdbc, 1, len(indices[pdbc])))
 				else:
-					for start in range(0, len(indices[pdbc])-bundle+1):
-						end = start + bundle - 1
+					if len(indices[pdbc]) <= bundle:
 						infile = '{}/../pdbs/{}.pdb'.format(famdir, pdb)
-						outfile = '{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdbc, start+1, end+1)
+						outfile = '{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdbc, 1, len(indices[pdbc]))
 						if not os.path.isfile(infile): raise IOError('Could not find {}'.format(infile))
 						if os.path.isfile(outfile) and os.path.getsize(outfile): continue
+						manually_cut(infile, outfile, chain=pdbc[-1], start=indices[pdbc][0][0], end=indices[pdbc][-1][1])
+					else:
+						for start in range(0, len(indices[pdbc])-bundle+1):
+							end = start + bundle - 1
+							infile = '{}/../pdbs/{}.pdb'.format(famdir, pdb)
+							outfile = '{}/../cut_pdbs/{}_h{}-{}.pdb'.format(famdir, pdbc, start+1, end+1)
+							if not os.path.isfile(infile): raise IOError('Could not find {}'.format(infile))
+							if os.path.isfile(outfile) and os.path.getsize(outfile): continue
 
-						manually_cut(infile, outfile, chain=pdbc[-1], start=indices[pdbc][start][0], end=indices[pdbc][end][1])
+							manually_cut(infile, outfile, chain=pdbc[-1], start=indices[pdbc][start][0], end=indices[pdbc][end][1])
 
 
 	def run(self):
@@ -452,10 +467,11 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument('--skip-cut', action='store_true')
+	parser.add_argument('--min-tms', default=3, type=int, help='Minimum TMSs allowed in an aligned PDB')
 	parser.add_argument('d2dir', default='deuterocol2', help='Deuterocol2 directory (contains config/, pdbs/, and superpositions/)')
 
 	args = parser.parse_args()
 
 
-	x = TMalign(d2dir=args.d2dir, skip_cut=args.skip_cut)
+	x = TMalign(d2dir=args.d2dir, skip_cut=args.skip_cut, min_tms=min_tms)
 	x.run()

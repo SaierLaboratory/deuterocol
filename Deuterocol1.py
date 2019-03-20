@@ -6,6 +6,7 @@ import argparse, os, re, tempfile, subprocess, json
 import urllib
 import sys
 import random
+import shutil
 import numpy as np
 random.seed(0)
 
@@ -274,7 +275,6 @@ class Subunit(object):
 				start = 0
 				end = spanstr[spanstr[1:].find('-'):]
 			else:
-				#print(s)
 				start, end = spanstr.split('-')
 			spans.append((int(start), int(end)))
 		return Subunit(pdbid, letter, spans)
@@ -327,7 +327,6 @@ class Deuterocol1(object):
 	def get_pdb_sequences(self):
 		subunitlist = self.tmdata.get_distinct_subunits()
 		subunitlist = [x[:4].upper() + x[4:] for x in subunitlist]
-		#print(subunitlist)
 
 		tf = tempfile.NamedTemporaryFile()
 		s = ''
@@ -482,7 +481,26 @@ class Deuterocol1(object):
 
 		with open('{}/pdblist.json'.format(self.outdir), 'w') as f: f.write(json.dumps(pdbcdict, indent=4))
 
-	def fetch_pdbs(self, force=False):
+	def fetch_pdbs_opm(self, force=False):
+		pdbidlist = set()
+		with open('{}/pdblist.json'.format(self.outdir)) as f:
+			pdbcdict = json.loads(f.read())
+			for fam in pdbcdict: 
+				[pdbidlist.add(pdbid[:4]) for pdbid in pdbcdict[fam]]
+
+		copyme = []
+		for pdbid in sorted(pdbidlist):
+			if not force:
+				if os.path.isfile('{}/pdbs/{}.pdb'.format(self.outdir, pdbid.upper())): continue
+			copyme.append(pdbid)
+
+		if not os.path.isdir('{}/pdbs'.format(self.outdir)): os.mkdir('{}/pdbs'.format(self.outdir))
+
+		for pdbid in copyme:
+			shutil.copy('{}/pdb/{}.pdb'.format(self.tmdatadir, pdbid.lower()), '{}/pdbs/{}.pdb'.format(self.outdir, pdbid.upper()))
+
+
+	def fetch_pdbs_online(self, force=False):
 		pdbidlist = set()
 		with open('{}/pdblist.json'.format(self.outdir)) as f:
 			pdbcdict = json.loads(f.read())
@@ -575,7 +593,7 @@ class Deuterocol1(object):
 			tmspans[pdbid].truncate_to_resolved('{}/pdbs/{}.pdb'.format(self.outdir, pdbid[:4]), pdbid[-1])
 			#print(pdbid, tmspans[pdbid])
 
-			if len(tmspans[pdbid]) <= 2: continue
+			#if len(tmspans[pdbid]) <= 2: continue
 			indextable[pdbid] = [[s.start, s.end] for s in tmspans[pdbid]]
 			#print(len(tmspans[pdbid]))
 			tmcounts.append(len(tmspans[pdbid]))
@@ -613,16 +631,16 @@ class Deuterocol1(object):
 		tmcounts = []
 
 		for pdbid in sorted(pdbidlist):
+			#print('fetch_indices', pdbid)
 			unionspans[pdbid] = opmspans[pdbid]
 			tmspans[pdbid] = unionspans[pdbid].extend(stridespans[pdbid], selfish=True)
 			tmspans[pdbid].merge()
 
-			tmspans[pdbid].truncate_to_resolved('{}/pdbs/{}.pdb'.format(self.outdir, pdbid[:4], pdbid[-1]))
+			tmspans[pdbid].truncate_to_resolved('{}/pdbs/{}.pdb'.format(self.outdir, pdbid[:4]), pdbid[-1])
 
-			if len(tmspans[pdbid]) <= 2: continue
+			#if len(tmspans[pdbid]) <= 2: continue
 			indextable[pdbid] = [[s.start, s.end] for s in tmspans[pdbid]]
 			tmcounts.append(len(tmspans[pdbid]))
-
 
 		if VERBOSITY: info('TMS stats: N = {}, min = {}, mean = {:0.1f} +/- {:0.1f}, max = {}'.format(len(tmcounts), min(tmcounts), np.mean(tmcounts), np.std(tmcounts), max(tmcounts)))
 
@@ -833,9 +851,9 @@ class Deuterocol1(object):
 		else: tclist = rawtclist
 
 		self.get_pdbs(*tclist)
-		self.fetch_pdbs(force=force)
+		self.fetch_pdbs_opm(force=force)
 
-		self.fetch_indices_method1()
+		self.fetch_indices_method2()
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Cross-checks OPM and PDBTM against TCDB')

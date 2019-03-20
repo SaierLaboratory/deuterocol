@@ -35,7 +35,6 @@ def _scroll_json(url):
 	out += obj['objects']
 
 	for i in range(page_num+1, int(math.ceil(total_objects/page_size))):
-		print(url + '?pageNum={}'.format(i))
 		f = urllib.urlopen(url + '?pageNum={}'.format(i))
 		raw = f.read()
 		obj = json.loads(raw)
@@ -226,8 +225,6 @@ def process_opm_scroll_primaries(outdir, force=False):
 		struclist = json.loads(f.read())
 		for struc in struclist: idlist.append(struc['id'])
 	
-
-
 	primary_structures = {}
 	if force or not os.path.isfile('{}/indiv_structures.tsv'.format(outdir)):
 		with open('{}/indiv_structures.tsv'.format(outdir), 'w') as f:
@@ -239,7 +236,9 @@ def process_opm_scroll_primaries(outdir, force=False):
 				primary_structures[obj['pdbid']] = obj
 				f.write('{}\t{}\n'.format(obj['pdbid'], raw))
 
-				if not (n % 100): f.flush()
+				if not (n % 100): 
+					f.flush()
+					print('Committed {}/{} individual structure records to disk'.format(n, len(idlist)))
 	else: print('indiv_structures.json already exists, skipping download')
 
 	secondary_representations = {}

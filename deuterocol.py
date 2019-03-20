@@ -31,6 +31,7 @@ class Deuterocol(object):
 	force = False
 	allow_internal = False
 	skip_cut = False
+	min_tms = 3
 
 	def __init__(self, outdir='deuterocol_out'):
 		self.outdir = outdir
@@ -66,6 +67,7 @@ class Deuterocol(object):
 		elif params.prop == 'bundle': self.bundle = int(params.val[0])
 		elif params.prop == 'children': self.children = int(params.val[0])
 		elif params.prop == 'tmdata': self.tmdatadir = params.val[0]
+		elif params.prop == 'min_tms': self.min_tms = int(params.val[0])
 		#2 vals required
 
 	def get_children(self, tclist, level=4):
@@ -100,29 +102,82 @@ class Deuterocol(object):
 					break
 		return sorted(children)
 
+	def write_configuration(self):
+		with open('{}/deuterocol.cfg'.format(self.outdir), 'w') as f:
+			s = 'set outdir {}\n'.format(self.outdir)
+			f.write(s)
+
+			s = 'set fams1'
+			for fam in self.fams1: s += ' {}'.format(fam)
+			s += '\n'
+			f.write(s)
+
+			s = 'set fams2'
+			for fam in self.fams2: s += ' {}'.format(fam)
+			s += '\n'
+			f.write(s)
+
+			s = 'set children {}\n'.format(self.children)
+			f.write(s)
+
+			s = 'set bundle {}\n'.format(self.bundle)
+			f.write(s)
+
+			s = 'set tmdata {}\n'.format(self.tmdatadir)
+			f.write(s)
+
+			s = 'set min_tms {}\n'.format(self.min_tms)
+			f.write(s)
+
+			if self.force:
+				s = 'set force\n'
+				f.write(s)
+			if self.allow_internal:
+				s = 'set allow_internal\n'
+				f.write(s)
+			if self.skip_cut:
+				s = 'set skip_cut\n'
+				f.write(s)
 	def run(self):
 		if self.children is not None:
 			self.fams1 = [str(fam) for fam in self.get_children(self.fams1, level=self.children)]
 			self.fams2 = [str(fam) for fam in self.get_children(self.fams2, level=self.children)]
 
 		if not os.path.isdir(self.outdir): os.mkdir(self.outdir)
+
+		self.write_configuration()
+
+		Deuterocol1.info('Running Deuterocol 1...')
 		deut1 = Deuterocol1.Deuterocol1(tmdatadir=self.tmdatadir, outdir='{}/deuterocol1'.format(self.outdir), 
 			invert=self.generate_negative, inclusive=self.generate_negative, 
 		)
 		deut1.run(*(self.fams1 + self.fams2), force=self.force)
 
+		Deuterocol1.info('Running Deuterocol 2...')
 		deut2 = Deuterocol2.Deuterocol2(tmdatadir=self.tmdatadir, d1dir='{}/deuterocol1'.format(self.outdir),
 			outdir=self.outdir, bundle=self.bundle, allow_internal=self.allow_internal
 		)
 		deut2.run(self.fams1, self.fams2)
 
-		tma = tmalign.TMalign(d2dir=self.outdir, skip_cut=self.skip_cut)
+		Deuterocol1.info('Running TMalign...')
+		tma = tmalign.TMalign(d2dir=self.outdir, skip_cut=self.skip_cut, min_tms=self.min_tms)
 		tma.run()
 		#TODO: min_tms, max_tms
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--config', help='Load config file')
+	parser.add_argument('--force', action='store_true', help='Overwrite files with wild abandon')
+	parser.add_argument('--allow-internal', action='store_true', help='Allow within-TCID comparisons')
+	parser.add_argument('--skip-cut', action='store_true', help='Skip cutting step. Only use this if all PDBs have been cut.')
+	parser.add_argument('--bundle', type=int, default=None, help='Bundle size')
+	parser.add_argument('--children', type=int, default=4, help='What TC-ID level to split families to')
+	if 'TMDATA' in os.environ: parser.add_argument('--tmdata', default=os.environ['TMDATA'], help='Where tmdata is (default: $TMDATA == {})'.format(os.environ['TMDATA']))
+	else: parser.add_argument('--tmdata', default='tmdata', help='Where tmdata is (default: tmdata)')
+	parser.add_argument('--min-tms', type=int, default=3, help='Minimum TMSs required to process an alignment')
+	parser.add_argument('--fams1', nargs='+', help='First set of families')
+	parser.add_argument('--fams2', nargs='*', help='Second set of families. Leave blank to generate a negative control')
+
 	parser.add_argument('outdir', nargs='?')
 	args = parser.parse_args()
 
