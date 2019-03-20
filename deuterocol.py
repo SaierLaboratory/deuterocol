@@ -15,6 +15,7 @@ import os
 import Deuterocol1
 import Deuterocol2
 import tmalign
+import json2tsv
 
 from kevtools_common.types import TCID
 from kevtools_common.types import TCIDCollection
@@ -163,6 +164,22 @@ class Deuterocol(object):
 		tma = tmalign.TMalign(d2dir=self.outdir, skip_cut=self.skip_cut, min_tms=self.min_tms)
 		tma.run()
 		#TODO: min_tms, max_tms
+
+		Deuterocol1.info('Generating tables...')
+		self.generate_tables()
+
+	def generate_tables(self):
+		if not os.path.isdir('{}/tables'.format(self.outdir)): os.mkdir('{}/tables'.format(self.outdir))
+
+		json2tsv.main(self.outdir, '{}/tables/all.tsv'.format(self.outdir))
+
+		for subdir in os.listdir(self.outdir):
+			path = '{}/{}'.format(self.outdir, subdir)
+			if '_vs_' in subdir:
+				if os.path.isfile(path + '/tmalignments/sp_all.tsv'):
+					infn = path + '/tmalignments/sp_all.tsv'
+					outfn = '{}/tables/{}.tsv'.format(self.outdir, subdir)
+					json2tsv.main(infn, outfn)
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
