@@ -186,8 +186,14 @@ def main(name, obj, d2dir, wd=None):
 	pymol.cmd.zoom('*present')
 	pymol.cmd.show('cartoon', '*present')
 
-	pymol.cmd.color('palegreen', obj['query'])
-	pymol.cmd.color('palecyan', obj['subject'])
+	#pymol.cmd.color('palegreen', obj['query'])
+	#pymol.cmd.color('palecyan', obj['subject'])
+	pymol.cmd.color('smudge', obj['query'])
+	pymol.cmd.color('deepteal', obj['subject'])
+	pymol.cmd.color('splitpea', 'qchain')
+	pymol.cmd.color('lightteal', 'schain')
+	pymol.cmd.color('palegreen', 'qmasked')
+	pymol.cmd.color('palecyan', 'smasked')
 	pymol.cmd.color('tv_green', 'qaligned')
 	pymol.cmd.color('cyan', 'saligned')
 
