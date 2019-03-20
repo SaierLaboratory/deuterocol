@@ -35,7 +35,8 @@ class Paragraph(object):
 	def initialize_dir(self):
 		if not os.path.isdir(self.outdir): os.mkdir(self.outdir)
 
-		for subdir in ('config', 'html', 'pdbs', 'sequences', 'superpositions'):
+		#for subdir in ('config', 'html', 'pdbs', 'sequences', 'superpositions'):
+		for subdir in ('config', 'superpositions'):
 			if not os.path.isdir('{}/{}'.format(self.outdir, subdir)): 
 				os.mkdir('{}/{}'.format(self.outdir, subdir))
 		with open('{}/config/command_line'.format(self.outdir), 'w') as f: 

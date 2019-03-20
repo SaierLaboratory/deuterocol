@@ -545,6 +545,7 @@ class Deuterocol1(object):
 					
 
 		del tf
+
 	def fetch_indices_method1(self):
 		''' Method 1: OPM, PDBTM, and STRIDE
 
@@ -591,6 +592,42 @@ class Deuterocol1(object):
 			#print('\t', stridespans[pdbid])
 			#print('\t', tmspans[pdbid])
 			#print('#'*80)
+
+	def fetch_indices_method2(self):
+		''' Method 2: OPM and STRIDE
+
+		$OPM $STRIDE intersection
+		'''
+		pdbidlist = set()
+		with open('{}/pdblist.json'.format(self.outdir)) as f:
+			pdbcdict = json.loads(f.read())
+			for fam in pdbcdict:
+				[pdbidlist.add(pdbid) for pdbid in pdbcdict[fam]]
+
+		opmspans = self.fetch_spans(pdbidlist, 'opm')
+		stridespans = self.gen_stride_spans(pdbidlist, 'stride')
+
+		unionspans = {}
+		tmspans = {}
+		indextable = {}
+		tmcounts = []
+
+		for pdbid in sorted(pdbidlist):
+			unionspans[pdbid] = opmspans[pdbid]
+			tmspans[pdbid] = unionspans[pdbid].extend(stridespans[pdbid], selfish=True)
+			tmspans[pdbid].merge()
+
+			tmspans[pdbid].truncate_to_resolved('{}/pdbs/{}.pdb'.format(self.outdir, pdbid[:4], pdbid[-1]))
+
+			if len(tmspans[pdbid]) <= 2: continue
+			indextable[pdbid] = [[s.start, s.end] for s in tmspans[pdbid]]
+			tmcounts.append(len(tmspans[pdbid]))
+
+
+		if VERBOSITY: info('TMS stats: N = {}, min = {}, mean = {:0.1f} +/- {:0.1f}, max = {}'.format(len(tmcounts), min(tmcounts), np.mean(tmcounts), np.std(tmcounts), max(tmcounts)))
+
+		with open('{}/indices.json'.format(self.outdir), 'w') as f:
+			f.write(json.dumps(indextable, indent=4))
 
 	def gen_stride_spans(self, pdbidlist, db='stride'):
 		#TODO: a practical way to fold this back into a dbtool
