@@ -196,29 +196,41 @@ def main(name, obj, d2dir, wd=None):
 	pymol.cmd.color('palecyan', 'smasked')
 	pymol.cmd.color('tv_green', 'qaligned')
 	pymol.cmd.color('cyan', 'saligned')
+	pymol.cmd.remove('r. DUM')
 
 	pymol.cmd.deselect()
+	pymol.cmd.rotate('z', 360)
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
-	parser.add_argument('d1dir', help='Deuterocol1 directory')
-	parser.add_argument('d2dir', help='Deuterocol2 directory')
+	parser.add_argument('d1dir', help='Deuterocol1 directory (or deuterocol files directory in 2-arg mode)')
+	parser.add_argument('d2dir', help='Deuterocol2 directory (or alignment name in 2-arg mode)')
 
-	parser.add_argument('name', help='name of alignment to load. Be warned that this selects only the first occurrence in all the files in the order given')
+	parser.add_argument('name', nargs='?', help="name of alignment to load. Be warned that this selects only the first occurrence in all the files in the order given. If this argument is left out, `d1dir' is interpreted as an all-containing deuterocol.py-generated directory, and `d2dir' is interpreted as `name'")
 
 	args = parser.parse_args()
 
-	query, qchain, qhel, vs, subject, schain, shel = args.name.split('_')
+	if not args.name:
+		d1dir = args.d1dir + '/deuterocol1'
+		d2dir = args.d1dir
+		name = args.d2dir
+	else: 
+		d1dir = args.d1dir
+		d2dir = args.d2dir
+		name = args.name
+		
+
+	query, qchain, qhel, vs, subject, schain, shel = name.split('_')
 	possfams = set()
 
-	with open(args.d1dir + '/pdblist.json') as f: pdbmap = json.loads(f.read())
+	with open(d1dir + '/pdblist.json') as f: pdbmap = json.loads(f.read())
 	for fam in pdbmap:
 		if (query + '_' + qchain) in pdbmap[fam]: possfams.add(fam)
 		if (subject + '_' + schain) in pdbmap[fam]: possfams.add(fam)
 
 	possfams = tuple(possfams)
 	subdirlist = []
-	for subdir in os.listdir(args.d2dir):
+	for subdir in os.listdir(d2dir):
 		count = 0
 		for fam in possfams: 
 			if fam in subdir: count += 1
@@ -230,7 +242,7 @@ if __name__ == '__main__':
 	n = 0
 
 	for subdir in subdirlist:
-		fn = args.d2dir + '/' + subdir + '/tmalignments/sp_all.tsv'
+		fn = d2dir + '/' + subdir + '/tmalignments/sp_all.tsv'
 		if not os.path.isfile(fn): error('Could not find TMalign records for', subdir)
 
 	#for fn in args.infile:
@@ -238,18 +250,18 @@ if __name__ == '__main__':
 			for l in f:
 				n += 1
 				if not n % 10000: print('Checked', n, 'lines')
-				if l.startswith(args.name[:2]):
-					if l.startswith(args.name):
-						print('Found', args.name, 'in', fn)
+				if l.startswith(name[:2]):
+					if l.startswith(name):
+						print('Found', name, 'in', fn)
 						jstr = l[l.find('\t')+1:]
 						found = True
 				if found: break
 		if found: break
 
 	if not jstr: 
-		print('Error: Could not find {} in {}'.format(args.name, args.infile))
+		print('Error: Could not find {} in {}'.format(name, infile))
 
 	obj = json.loads(jstr)
 	wd = tempfile.mkdtemp()
-	try: main(args.name, obj, wd=wd, d2dir=args.d2dir)
+	try: main(name, obj, wd=wd, d2dir=d2dir)
 	finally: shutil.rmtree(wd)
